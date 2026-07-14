@@ -106,7 +106,7 @@ jobs:
         run: |
           npm test --prefix npm
           install_root="$(mktemp -d)"
-          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "package-release/tmh-$VERSION.tgz"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/tmh-$VERSION.tgz"
           test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
           test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
           ruby -c package-release/tmh.rb
@@ -142,7 +142,7 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.bare_version }}
         run: |
           install_root="$(mktemp -d)"
-          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "package-release/tmh-$VERSION.tgz"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/tmh-$VERSION.tgz"
           test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
           test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
 
@@ -203,7 +203,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          package="package-release/tmh-$VERSION.tgz"
+          package="./package-release/tmh-$VERSION.tgz"
           expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
           if published_integrity="$(npm view "tmh@$VERSION" dist.integrity 2>/dev/null)"; then
             test "$published_integrity" = "$expected_integrity"
@@ -286,7 +286,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          package="package-release/tmh-$VERSION.tgz"
+          package="./package-release/tmh-$VERSION.tgz"
           expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
           test "$(npm view "tmh@$VERSION" version)" = "$VERSION"
           test "$(npm view "tmh@$VERSION" dist.integrity)" = "$expected_integrity"
