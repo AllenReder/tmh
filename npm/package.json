@@ -1,5 +1,5 @@
 {
-  "name": "tmh",
+  "name": "@allenreder/tmh",
   "version": "0.0.0-development",
   "description": "Turn natural language into a terminal command you can review before running.",
   "type": "module",

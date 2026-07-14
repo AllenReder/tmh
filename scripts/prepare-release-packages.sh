@@ -72,6 +72,7 @@ for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
 done
 
 bare_version="${version#v}"
+package_archive="allenreder-tmh-$bare_version.tgz"
 node - "$output_dir/npm-package/package.json" "$bare_version" <<'EOF'
 import fs from "node:fs";
 
@@ -85,9 +86,10 @@ EOF
   cd "$output_dir/npm-package"
   npm pack --pack-destination "$output_dir" >/dev/null
 )
+[ -f "$output_dir/$package_archive" ] || { printf 'npm package was not created: %s\n' "$package_archive" >&2; exit 1; }
 
 "$repo_dir/scripts/render-homebrew-formula.sh" "$version" "$assets_dir/checksums.txt" > "$output_dir/tmh.rb"
 ruby -c "$output_dir/tmh.rb" >/dev/null
 
-printf '%s\n' "$output_dir/tmh-$bare_version.tgz"
+printf '%s\n' "$output_dir/$package_archive"
 printf '%s\n' "$output_dir/tmh.rb"

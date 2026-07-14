@@ -66,9 +66,9 @@ done
   "$repo_dir/scripts/prepare-release-packages.sh" "$version" assets "$(basename "$second_output_dir")" >/dev/null
 )
 
-test -f "$output_dir/tmh-1.2.3.tgz"
+test -f "$output_dir/allenreder-tmh-1.2.3.tgz"
 test -f "$output_dir/tmh.rb"
-cmp -s "$output_dir/tmh-1.2.3.tgz" "$second_output_dir/tmh-1.2.3.tgz"
+cmp -s "$output_dir/allenreder-tmh-1.2.3.tgz" "$second_output_dir/allenreder-tmh-1.2.3.tgz"
 cmp -s "$output_dir/tmh.rb" "$second_output_dir/tmh.rb"
 ruby -c "$output_dir/tmh.rb" >/dev/null
 
@@ -78,7 +78,7 @@ for archive in tmh_darwin_amd64.tar.gz tmh_darwin_arm64.tar.gz tmh_linux_amd64.t
   grep -Fq "https://github.com/AllenReder/tmh/releases/download/$version/$archive" "$output_dir/tmh.rb"
 done
 
-tar -tzf "$output_dir/tmh-1.2.3.tgz" | LC_ALL=C sort > "$tmp_dir/package-files.actual"
+tar -tzf "$output_dir/allenreder-tmh-1.2.3.tgz" | LC_ALL=C sort > "$tmp_dir/package-files.actual"
 cat > "$tmp_dir/package-files.expected" <<'EOF'
 package/LICENSE
 package/README.md
@@ -97,7 +97,7 @@ EOF
 LC_ALL=C sort -o "$tmp_dir/package-files.expected" "$tmp_dir/package-files.expected"
 diff -u "$tmp_dir/package-files.expected" "$tmp_dir/package-files.actual"
 
-npm install --ignore-scripts --no-audit --no-fund --prefix "$install_dir" "$output_dir/tmh-1.2.3.tgz" >/dev/null
+npm install --ignore-scripts --no-audit --no-fund --prefix "$install_dir" "$output_dir/allenreder-tmh-1.2.3.tgz" >/dev/null
 test "$("$install_dir/node_modules/.bin/tmh" --version)" = "1.2.3"
 test "$("$install_dir/node_modules/.bin/tmha" --version)" = "1.2.3"
 test "$("$install_dir/node_modules/.bin/tmh" one two)" = "command=tmh args=one,two"

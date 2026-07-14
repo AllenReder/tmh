@@ -106,7 +106,7 @@ jobs:
         run: |
           npm test --prefix npm
           install_root="$(mktemp -d)"
-          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/tmh-$VERSION.tgz"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/allenreder-tmh-$VERSION.tgz"
           test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
           test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
           ruby -c package-release/tmh.rb
@@ -115,7 +115,7 @@ jobs:
         with:
           name: package-release-${{ needs.resolve.outputs.version }}
           path: |
-            package-release/tmh-${{ needs.resolve.outputs.bare_version }}.tgz
+            package-release/allenreder-tmh-${{ needs.resolve.outputs.bare_version }}.tgz
             package-release/tmh.rb
           if-no-files-found: error
           retention-days: 7
@@ -142,7 +142,7 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.bare_version }}
         run: |
           install_root="$(mktemp -d)"
-          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/tmh-$VERSION.tgz"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/allenreder-tmh-$VERSION.tgz"
           test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
           test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
 
@@ -203,17 +203,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          package="./package-release/tmh-$VERSION.tgz"
+          package="./package-release/allenreder-tmh-$VERSION.tgz"
           expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
-          if published_integrity="$(npm view "tmh@$VERSION" dist.integrity 2>/dev/null)"; then
+          if published_integrity="$(npm view "@allenreder/tmh@$VERSION" dist.integrity 2>/dev/null)"; then
             test "$published_integrity" = "$expected_integrity"
-            echo "tmh@$VERSION is already published with the expected integrity."
+            echo "@allenreder/tmh@$VERSION is already published with the expected integrity."
           else
             npm publish "$package" --provenance
           fi
 
           for attempt in {1..12}; do
-            published_integrity="$(npm view "tmh@$VERSION" dist.integrity 2>/dev/null || true)"
+            published_integrity="$(npm view "@allenreder/tmh@$VERSION" dist.integrity 2>/dev/null || true)"
             if [[ "$published_integrity" == "$expected_integrity" ]]; then
               exit 0
             fi
@@ -257,12 +257,12 @@ jobs:
 
           install -m 0644 package-release/tmh.rb "$formula"
           git -C homebrew-tap diff --check
-          if git -C homebrew-tap diff --quiet; then
+          git -C homebrew-tap add Formula/tmh.rb
+          if git -C homebrew-tap diff --cached --quiet; then
             exit 0
           fi
           git -C homebrew-tap config user.name "github-actions[bot]"
           git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C homebrew-tap add Formula/tmh.rb
           git -C homebrew-tap commit -m "tmh $VERSION"
           git -C homebrew-tap push origin HEAD
 
@@ -286,10 +286,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          package="./package-release/tmh-$VERSION.tgz"
+          package="./package-release/allenreder-tmh-$VERSION.tgz"
           expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
-          test "$(npm view "tmh@$VERSION" version)" = "$VERSION"
-          test "$(npm view "tmh@$VERSION" dist.integrity)" = "$expected_integrity"
+          test "$(npm view "@allenreder/tmh@$VERSION" version)" = "$VERSION"
+          test "$(npm view "@allenreder/tmh@$VERSION" dist.integrity)" = "$expected_integrity"
 
           for attempt in {1..12}; do
             if curl -fsSL "https://raw.githubusercontent.com/AllenReder/homebrew-tap/main/Formula/tmh.rb" -o published-tmh.rb && cmp -s package-release/tmh.rb published-tmh.rb; then

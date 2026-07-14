@@ -20,7 +20,7 @@ Release automation is implemented by:
 - A clean, up-to-date `main` branch with required CI checks passing.
 - The `HOMEBREW_TAP_DEPLOY_KEY` Environment secret configured as a write-enabled
   deploy key for `AllenReder/homebrew-tap`.
-- npm Trusted Publishing configured for `AllenReder/tmh`, workflow
+- npm Trusted Publishing configured for `@allenreder/tmh`, workflow
   `publish-packages.yml`, Environment `release`, and the `npm publish` action.
 
 Authenticate and confirm repository access before starting:
@@ -67,7 +67,7 @@ Confirm that the version is unused in every channel:
 
 ```sh
 ! gh release view "$version" >/dev/null 2>&1
-! npm view "tmh@${version#v}" version >/dev/null 2>&1
+! npm view "@allenreder/tmh@${version#v}" version >/dev/null 2>&1
 ```
 
 Run all deterministic checks and build a release snapshot:
@@ -86,7 +86,7 @@ test -f dist/tmh_darwin_arm64.tar.gz
 test -f dist/tmh_linux_amd64.tar.gz
 test -f dist/tmh_linux_arm64.tar.gz
 scripts/prepare-release-packages.sh "$version" dist dist/packages
-test -f "dist/packages/tmh-${version#v}.tgz"
+test -f "dist/packages/allenreder-tmh-${version#v}.tgz"
 test -f dist/packages/tmh.rb
 ```
 
@@ -159,10 +159,10 @@ test -L "$install_root/bin/tmha"
 Verify npm in an isolated prefix:
 
 ```sh
-test "$(npm view "tmh@${version#v}" version)" = "${version#v}"
+test "$(npm view "@allenreder/tmh@${version#v}" version)" = "${version#v}"
 npm_root="$(mktemp -d)"
 npm install --ignore-scripts --no-audit --no-fund \
-  --prefix "$npm_root" "tmh@${version#v}"
+  --prefix "$npm_root" "@allenreder/tmh@${version#v}"
 test "$("$npm_root/node_modules/.bin/tmh" --version)" = "${version#v}"
 test "$("$npm_root/node_modules/.bin/tmha" --version)" = "${version#v}"
 ```

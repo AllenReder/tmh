@@ -6,7 +6,7 @@ Turn natural language into a terminal command you can review before running.
 
 [![CI](https://github.com/AllenReder/tmh/actions/workflows/ci.yml/badge.svg)](https://github.com/AllenReder/tmh/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/AllenReder/tmh)](https://github.com/AllenReder/tmh/releases)
-[![npm](https://img.shields.io/npm/v/tmh)](https://www.npmjs.com/package/tmh)
+[![npm](https://img.shields.io/npm/v/%40allenreder%2Ftmh)](https://www.npmjs.com/package/@allenreder/tmh)
 [![License](https://img.shields.io/github/license/AllenReder/tmh)](LICENSE)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
@@ -40,7 +40,7 @@ brew install AllenReder/tap/tmh
 If you already use Node.js 22 or newer:
 
 ```sh
-npm install -g tmh
+npm install -g @allenreder/tmh
 ```
 
 You can also use the standalone installer:
@@ -60,7 +60,7 @@ insertion, add the line for your installation method to `~/.zshrc`:
 source "$(brew --prefix)/share/tmh/tmh.zsh"
 
 # npm
-source "$(npm root -g)/tmh/shell/tmh.zsh"
+source "$(npm root -g)/@allenreder/tmh/shell/tmh.zsh"
 ```
 
 Without the optional Zsh integration, `tmh` prints the generated command to
