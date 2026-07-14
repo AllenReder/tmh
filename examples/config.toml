@@ -1,0 +1,8 @@
+# OpenAI-compatible Chat Completions endpoint.
+base_url = "https://api.openai.com/v1"
+
+# Required. tmh intentionally has no default model.
+model = "your-model-name"
+
+tmh_timeout_seconds = 30
+tmha_timeout_seconds = 90

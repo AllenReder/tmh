@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must use vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+
+      - name: Verify tag commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Test
+        run: go test -race -timeout 2m ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l $(find . -type f -name '*.go'))"
+
+      - name: Validate shell and installer
+        run: |
+          zsh -n shell/tmh.zsh
+          zsh shell/tmh.zsh.test.zsh
+          sh -n install.sh
+          sh tests/install.test.sh
+
+      - name: Scan Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+      - name: Validate GoReleaser configuration
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.15.2
+          args: check
+
+      - name: Build release snapshot
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.15.2
+          args: release --snapshot --clean
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.15.2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-release:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir release-assets
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir release-assets
+
+      - name: Verify expected assets and checksums
+        working-directory: release-assets
+        run: |
+          test -f checksums.txt
+          test -f tmh_darwin_amd64.tar.gz
+          test -f tmh_darwin_arm64.tar.gz
+          test -f tmh_linux_amd64.tar.gz
+          test -f tmh_linux_arm64.tar.gz
+          sha256sum --check checksums.txt

@@ -1,0 +1,39 @@
+version: 2
+
+project_name: tmh
+
+builds:
+  - id: tmh
+    main: ./cmd/tmh
+    binary: tmh
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/AllenReder/tmh/internal/cli.Version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - THIRD_PARTY_NOTICES.md
+      - README.md
+      - README.zh-CN.md
+      - src: shell/tmh.zsh
+        dst: tmh.zsh
+      - src: examples/config.toml
+        dst: config.example.toml
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
