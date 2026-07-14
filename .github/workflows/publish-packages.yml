@@ -212,12 +212,13 @@ jobs:
             npm publish "$package" --provenance
           fi
 
-          for attempt in {1..12}; do
+          for attempt in {1..30}; do
             published_integrity="$(npm view "@allenreder/tmh@$VERSION" dist.integrity 2>/dev/null || true)"
             if [[ "$published_integrity" == "$expected_integrity" ]]; then
               exit 0
             fi
-            sleep 10
+            echo "Waiting for npm registry propagation (attempt $attempt/30)..."
+            sleep 20
           done
           echo "npm registry did not expose the expected package integrity." >&2
           exit 1
