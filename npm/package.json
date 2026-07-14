@@ -1,0 +1,48 @@
+{
+  "name": "tmh",
+  "version": "0.0.0-development",
+  "description": "Turn natural language into a terminal command you can review before running.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Wenyou Yi",
+  "homepage": "https://github.com/AllenReder/tmh#readme",
+  "bugs": {
+    "url": "https://github.com/AllenReder/tmh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AllenReder/tmh.git"
+  },
+  "keywords": [
+    "cli",
+    "terminal",
+    "shell",
+    "zsh",
+    "openai"
+  ],
+  "bin": {
+    "tmh": "bin/tmh.mjs",
+    "tmha": "bin/tmha.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "vendor/",
+    "shell/",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  }
+}

@@ -14,11 +14,15 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
       - name: Install Zsh on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh
@@ -34,11 +38,15 @@ jobs:
           zsh shell/tmh.zsh.test.zsh
           sh -n install.sh
           sh tests/install.test.sh
+      - name: Test package distributions
+        run: |
+          npm test --prefix npm
+          sh tests/packages.test.sh
       - name: Scan Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
       - name: Validate release configuration
         if: runner.os == 'Linux'
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           distribution: goreleaser
           version: v2.15.2

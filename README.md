@@ -6,6 +6,7 @@ Turn natural language into a terminal command you can review before running.
 
 [![CI](https://github.com/AllenReder/tmh/actions/workflows/ci.yml/badge.svg)](https://github.com/AllenReder/tmh/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/AllenReder/tmh)](https://github.com/AllenReder/tmh/releases)
+[![npm](https://img.shields.io/npm/v/tmh)](https://www.npmjs.com/package/tmh)
 [![License](https://img.shields.io/github/license/AllenReder/tmh)](LICENSE)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
@@ -30,12 +31,40 @@ find . -type f -exec du -h {} + | sort -hr | head -n 10
 
 ## Install
 
+Homebrew is the recommended installation method on macOS and Linux:
+
+```sh
+brew install AllenReder/tap/tmh
+```
+
+If you already use Node.js 22 or newer:
+
+```sh
+npm install -g tmh
+```
+
+You can also use the standalone installer:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/AllenReder/tmh/main/install.sh | sh
 ```
 
 The installer places `tmh` and `tmha` in `~/.local/bin` and asks before
 enabling Zsh integration in `~/.zshrc`.
+
+Homebrew and npm do not modify shell startup files. To enable Zsh command
+insertion, add the line for your installation method to `~/.zshrc`:
+
+```zsh
+# Homebrew
+source "$(brew --prefix)/share/tmh/tmh.zsh"
+
+# npm
+source "$(npm root -g)/tmh/shell/tmh.zsh"
+```
+
+Without the optional Zsh integration, `tmh` prints the generated command to
+stdout and still never executes it automatically.
 
 Build from source:
 

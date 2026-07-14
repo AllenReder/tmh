@@ -6,6 +6,7 @@
 
 [![CI](https://github.com/AllenReder/tmh/actions/workflows/ci.yml/badge.svg)](https://github.com/AllenReder/tmh/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/AllenReder/tmh)](https://github.com/AllenReder/tmh/releases)
+[![npm](https://img.shields.io/npm/v/tmh)](https://www.npmjs.com/package/tmh)
 [![License](https://img.shields.io/github/license/AllenReder/tmh)](LICENSE)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
@@ -30,12 +31,40 @@ find . -type f -exec du -h {} + | sort -hr | head -n 10
 
 ## 安装
 
+macOS 和 Linux 推荐使用 Homebrew：
+
+```sh
+brew install AllenReder/tap/tmh
+```
+
+如果已经安装 Node.js 22 或更高版本，也可以使用 npm：
+
+```sh
+npm install -g tmh
+```
+
+也可以使用独立安装脚本：
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/AllenReder/tmh/main/install.sh | sh
 ```
 
 安装器会把 `tmh` 和 `tmha` 放到 `~/.local/bin`，并在修改
 `~/.zshrc` 启用 Zsh 集成前询问用户。
+
+Homebrew 和 npm 不会修改 Shell 启动文件。要启用 Zsh 命令插入功能，
+请根据安装方式把对应一行加入 `~/.zshrc`：
+
+```zsh
+# Homebrew
+source "$(brew --prefix)/share/tmh/tmh.zsh"
+
+# npm
+source "$(npm root -g)/tmh/shell/tmh.zsh"
+```
+
+不启用可选的 Zsh 集成时，`tmh` 会把生成的命令输出到 stdout，仍然
+不会自动执行命令。
 
 从源码构建：
 

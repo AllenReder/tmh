@@ -1,6 +1,6 @@
 GOVULNCHECK_VERSION ?= v1.6.0
 
-.PHONY: build test check
+.PHONY: build test test-packages check
 
 build:
 	mkdir -p bin
@@ -9,7 +9,11 @@ build:
 test:
 	go test -race -timeout 2m ./...
 
-check: test
+test-packages:
+	npm test --prefix npm
+	sh tests/packages.test.sh
+
+check: test test-packages
 	@files="$$(gofmt -l $$(find . -type f -name '*.go'))"; \
 		test -z "$$files" || { printf 'Go files need gofmt:\n%s\n' "$$files" >&2; exit 1; }
 	go vet ./...

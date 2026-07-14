@@ -1,43 +1,54 @@
 # Releasing tmh
 
-This document describes the release process for project maintainers. Release
-automation is implemented by `.github/workflows/release.yml` and
-`.goreleaser.yaml`.
+GitHub Releases are the source of truth for every tmh binary. A successful
+GitHub Release is followed by npm publication and an update to the official
+Homebrew tap. The downstream packages must contain the exact binaries from the
+published GitHub archives.
+
+Release automation is implemented by:
+
+- `.github/workflows/release.yml` for GitHub assets.
+- `.github/workflows/publish-packages.yml` for npm and Homebrew.
+- `.goreleaser.yaml` for the supported binary matrix and archives.
 
 ## Prerequisites
 
-- Release permission for the GitHub repository.
+- Release permission for `AllenReder/tmh`.
 - A configured `release` GitHub Environment.
-- `git`, `gh`, Go 1.25.12, Zsh, and GoReleaser 2.15.2 available locally.
-- A clean, up-to-date `main` branch.
-- All required CI and acceptance checks passing.
+- `git`, `gh`, Go 1.25.12, Node.js 22 or newer, npm, Ruby, Zsh, and
+  GoReleaser 2.15.2 available locally.
+- A clean, up-to-date `main` branch with required CI checks passing.
+- The `HOMEBREW_TAP_DEPLOY_KEY` Environment secret configured as a write-enabled
+  deploy key for `AllenReder/homebrew-tap`.
+- npm Trusted Publishing configured for `AllenReder/tmh`, workflow
+  `publish-packages.yml`, Environment `release`, and the `npm publish` action.
 
 Authenticate and confirm repository access before starting:
 
 ```sh
 gh auth status
+npm whoami
 git remote -v
 ```
 
 ## Versioning
 
-Releases use stable Semantic Versioning tags:
+All channels use the same stable Semantic Version:
 
 ```text
-vMAJOR.MINOR.PATCH
+Git tag and GitHub Release: vMAJOR.MINOR.PATCH
+npm package and Homebrew Formula: MAJOR.MINOR.PATCH
 ```
 
-Examples: `v0.1.0`, `v0.1.1`, `v1.0.0`.
-
-The Release workflow rejects tags that do not match this format. Published
-tags are immutable: do not move, replace, or reuse a released version.
+Published tags and npm versions are immutable. Never move, replace, or reuse a
+released version.
 
 ## Prepare the release
 
-Set the version to be released:
+Set and validate the version:
 
 ```sh
-version=v0.1.0
+version=v0.1.1
 printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
 ```
 
@@ -52,23 +63,21 @@ test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 test -z "$(git tag --list "$version")"
 ```
 
-Confirm that the version has not already been published:
+Confirm that the version is unused in every channel:
 
 ```sh
-if gh release view "$version" >/dev/null 2>&1; then
-  echo "release already exists: $version" >&2
-  exit 1
-fi
+! gh release view "$version" >/dev/null 2>&1
+! npm view "tmh@${version#v}" version >/dev/null 2>&1
 ```
 
-Run the deterministic checks and build a release snapshot:
+Run all deterministic checks and build a release snapshot:
 
 ```sh
 make check
 goreleaser release --snapshot --clean
 ```
 
-Confirm that the snapshot contains the expected archives and checksum file:
+Verify the snapshot assets and package assembly:
 
 ```sh
 test -f dist/checksums.txt
@@ -76,12 +85,14 @@ test -f dist/tmh_darwin_amd64.tar.gz
 test -f dist/tmh_darwin_arm64.tar.gz
 test -f dist/tmh_linux_amd64.tar.gz
 test -f dist/tmh_linux_arm64.tar.gz
-tar -tzf dist/tmh_darwin_arm64.tar.gz
+scripts/prepare-release-packages.sh "$version" dist dist/packages
+test -f "dist/packages/tmh-${version#v}.tgz"
+test -f dist/packages/tmh.rb
 ```
 
 ## Publish
 
-Verify the working tree once more, then create and push an annotated tag:
+Verify the worktree once more, then create and push an annotated tag:
 
 ```sh
 test -z "$(git status --porcelain)"
@@ -89,43 +100,43 @@ git tag -a "$version" -m "Release $version"
 git push origin "$version"
 ```
 
-Pushing the tag starts the Release workflow. It will:
+The `Release` workflow validates the tag, repeats all checks, publishes the
+GitHub Release, and verifies the five release assets. When it completes, the
+`Publish packages` workflow:
 
-1. Validate the tag and confirm that its commit is on `main`.
-2. Run tests, Vet, shell checks, the installer test, and a release snapshot.
-3. Publish the GitHub Release through GoReleaser.
-4. Download the published assets and verify their checksums.
+1. Downloads and verifies the GitHub Release assets.
+2. Builds the npm tarball and Homebrew Formula from those assets.
+3. Installs both packages on macOS and Linux.
+4. Publishes npm through OIDC Trusted Publishing.
+5. Updates `AllenReder/homebrew-tap` using its repository-scoped deploy key.
+6. Verifies registry integrity and the published Formula contents.
 
-## Monitor the workflow
-
-Find and watch the workflow run:
+Monitor both workflows:
 
 ```sh
 gh run list --workflow release.yml --branch "$version" --limit 1
-run_id="$(gh run list --workflow release.yml --branch "$version" --limit 1 --json databaseId --jq '.[0].databaseId')"
-test -n "$run_id"
-gh run watch "$run_id" --exit-status
+gh run list --workflow publish-packages.yml --limit 5
 ```
 
-If it fails, inspect the failed steps:
+Inspect failed steps with:
 
 ```sh
-gh run view "$run_id" --log-failed
+gh run view RUN_ID --log-failed
 ```
 
 ## Verify the release
 
-Inspect the Release and its assets:
+Inspect the GitHub Release and download all assets:
 
 ```sh
 gh release view "$version" --json tagName,url,isDraft,isPrerelease,assets
-```
-
-Download all assets and verify their checksums:
-
-```sh
 verify_dir="$(mktemp -d)"
 gh release download "$version" --dir "$verify_dir"
+```
+
+Verify checksums:
+
+```sh
 (
   cd "$verify_dir"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -136,7 +147,7 @@ gh release download "$version" --dir "$verify_dir"
 )
 ```
 
-Run an installation smoke test in a temporary directory:
+Verify the standalone installer:
 
 ```sh
 install_root="$(mktemp -d)"
@@ -145,11 +156,55 @@ test "$("$install_root/bin/tmh" --version)" = "${version#v}"
 test -L "$install_root/bin/tmha"
 ```
 
+Verify npm in an isolated prefix:
+
+```sh
+test "$(npm view "tmh@${version#v}" version)" = "${version#v}"
+npm_root="$(mktemp -d)"
+npm install --ignore-scripts --no-audit --no-fund \
+  --prefix "$npm_root" "tmh@${version#v}"
+test "$("$npm_root/node_modules/.bin/tmh" --version)" = "${version#v}"
+test "$("$npm_root/node_modules/.bin/tmha" --version)" = "${version#v}"
+```
+
+Verify Homebrew:
+
+```sh
+brew update
+brew install AllenReder/tap/tmh
+brew test AllenReder/tap/tmh
+test "$(tmh --version)" = "${version#v}"
+test "$(tmha --version)" = "${version#v}"
+```
+
+## First npm publication
+
+Trusted Publishing can only be configured after the npm package exists. For
+the first npm version only:
+
+1. Create a short-lived granular npm token with publish access.
+2. Store it as `NPM_BOOTSTRAP_TOKEN` in the `release` Environment.
+3. Publish the first package through `publish-packages.yml` with provenance.
+4. Configure the npm Trusted Publisher using the repository, workflow, and
+   Environment listed in the prerequisites.
+5. Require two-factor authentication and disallow token publication for the
+   package.
+6. Revoke the token, delete the GitHub secret, and remove the bootstrap token
+   fallback from the workflow.
+
+Never print or commit the token.
+
 ## Failure recovery
 
-- Before a tag is pushed, delete the local tag with `git tag -d "$version"`,
-  fix the problem, and repeat the checks.
-- After a tag is pushed, do not move, overwrite, or automatically delete it.
-- If a published release requires code changes, create a new patch release.
-- Deleting a remote tag or GitHub Release is an exceptional maintenance action
-  and must be reviewed separately.
+- Before a tag is pushed, delete only the local tag, fix the problem, and
+  repeat all checks.
+- After a tag is pushed, never move or overwrite it.
+- A transient npm, Homebrew, or network failure can be retried with the manual
+  `Publish packages` workflow for the same version. It verifies existing
+  content before skipping any publication.
+- If npm already contains the version with different integrity, stop. npm
+  versions cannot be overwritten; investigate and publish a fixed patch
+  version.
+- A Formula publishing error may be corrected in the tap only when it still
+  references the unchanged, verified GitHub Release assets.
+- Any source or binary change requires a new patch release.

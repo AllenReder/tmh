@@ -1,0 +1,301 @@
+name: Publish packages
+run-name: Publish packages ${{ github.event.workflow_run.head_branch || inputs.version }}
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable release version, with or without the leading v
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-packages-${{ github.event.workflow_run.head_branch || inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      bare_version: ${{ steps.release.outputs.bare_version }}
+      tag_sha: ${{ steps.release.outputs.tag_sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          WORKFLOW_VERSION: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            version="$WORKFLOW_VERSION"
+          else
+            version="$INPUT_VERSION"
+          fi
+          [[ "$version" == v* ]] || version="v$version"
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Version must use vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          }
+
+          git fetch origin main --tags
+          tag_sha="$(git rev-list -n 1 "$version^{commit}")"
+          test -n "$tag_sha"
+          git merge-base --is-ancestor "$tag_sha" origin/main
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            test "$tag_sha" = "$WORKFLOW_SHA"
+          fi
+
+          release_state="$(gh release view "$version" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')"
+          test "$release_state" = $'false\tfalse'
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "bare_version=${version#v}" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
+
+  prepare:
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install pinned npm CLI
+        run: npm install --global npm@11.18.0
+
+      - name: Download GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          mkdir release-assets
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" --dir release-assets
+
+      - name: Assemble npm package and Homebrew Formula
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: scripts/prepare-release-packages.sh "$VERSION" release-assets package-release
+
+      - name: Verify package contents and Linux executable
+        env:
+          VERSION: ${{ needs.resolve.outputs.bare_version }}
+        run: |
+          npm test --prefix npm
+          install_root="$(mktemp -d)"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "package-release/tmh-$VERSION.tgz"
+          test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
+          test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
+          ruby -c package-release/tmh.rb
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-release-${{ needs.resolve.outputs.version }}
+          path: |
+            package-release/tmh-${{ needs.resolve.outputs.bare_version }}.tgz
+            package-release/tmh.rb
+          if-no-files-found: error
+          retention-days: 7
+
+  test-npm:
+    needs: [resolve, prepare]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package-release-${{ needs.resolve.outputs.version }}
+          path: package-release
+
+      - name: Install and test npm package
+        env:
+          VERSION: ${{ needs.resolve.outputs.bare_version }}
+        run: |
+          install_root="$(mktemp -d)"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "package-release/tmh-$VERSION.tgz"
+          test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
+          test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
+
+  test-homebrew:
+    needs: [resolve, prepare]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Set up Homebrew on Linux
+        if: runner.os == 'Linux'
+        uses: Homebrew/actions/setup-homebrew@18fcb8e3e06b4247c676c506750dc95ea7226479
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package-release-${{ needs.resolve.outputs.version }}
+          path: package-release
+
+      - name: Install and test Homebrew Formula
+        run: |
+          brew style package-release/tmh.rb
+          brew audit --strict --online package-release/tmh.rb
+          brew tap-new --no-git tmh-test/tap
+          tap_dir="$(brew --repository tmh-test/tap)"
+          install -m 0644 package-release/tmh.rb "$tap_dir/Formula/tmh.rb"
+          brew install tmh-test/tap/tmh
+          brew test tmh-test/tap/tmh
+          test "$(tmh --version)" = "${{ needs.resolve.outputs.bare_version }}"
+          test "$(tmha --version)" = "${{ needs.resolve.outputs.bare_version }}"
+
+  publish-npm:
+    needs: [resolve, prepare, test-npm, test-homebrew]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install pinned npm CLI
+        run: npm install --global npm@11.18.0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package-release-${{ needs.resolve.outputs.version }}
+          path: package-release
+
+      - name: Publish or verify npm package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          VERSION: ${{ needs.resolve.outputs.bare_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="package-release/tmh-$VERSION.tgz"
+          expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
+          if published_integrity="$(npm view "tmh@$VERSION" dist.integrity 2>/dev/null)"; then
+            test "$published_integrity" = "$expected_integrity"
+            echo "tmh@$VERSION is already published with the expected integrity."
+          else
+            npm publish "$package" --provenance
+          fi
+
+          for attempt in {1..12}; do
+            published_integrity="$(npm view "tmh@$VERSION" dist.integrity 2>/dev/null || true)"
+            if [[ "$published_integrity" == "$expected_integrity" ]]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "npm registry did not expose the expected package integrity." >&2
+          exit 1
+
+  publish-homebrew:
+    needs: [resolve, prepare, test-npm, test-homebrew]
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: AllenReder/homebrew-tap
+          path: homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package-release-${{ needs.resolve.outputs.version }}
+          path: package-release
+
+      - name: Publish or verify Homebrew Formula
+        env:
+          VERSION: ${{ needs.resolve.outputs.bare_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p homebrew-tap/Formula
+          formula="homebrew-tap/Formula/tmh.rb"
+          if [[ -f "$formula" ]] && grep -Fq "version \"$VERSION\"" "$formula"; then
+            cmp -s package-release/tmh.rb "$formula" || {
+              echo "Formula for $VERSION already exists with different content." >&2
+              exit 1
+            }
+            echo "Homebrew Formula for $VERSION is already published."
+            exit 0
+          fi
+
+          install -m 0644 package-release/tmh.rb "$formula"
+          git -C homebrew-tap diff --check
+          if git -C homebrew-tap diff --quiet; then
+            exit 0
+          fi
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add Formula/tmh.rb
+          git -C homebrew-tap commit -m "tmh $VERSION"
+          git -C homebrew-tap push origin HEAD
+
+  verify:
+    needs: [resolve, publish-npm, publish-homebrew]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package-release-${{ needs.resolve.outputs.version }}
+          path: package-release
+
+      - name: Verify published package channels
+        env:
+          VERSION: ${{ needs.resolve.outputs.bare_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="package-release/tmh-$VERSION.tgz"
+          expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
+          test "$(npm view "tmh@$VERSION" version)" = "$VERSION"
+          test "$(npm view "tmh@$VERSION" dist.integrity)" = "$expected_integrity"
+
+          for attempt in {1..12}; do
+            if curl -fsSL "https://raw.githubusercontent.com/AllenReder/homebrew-tap/main/Formula/tmh.rb" -o published-tmh.rb && cmp -s package-release/tmh.rb published-tmh.rb; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Published Homebrew Formula does not match the tested Formula." >&2
+          exit 1
