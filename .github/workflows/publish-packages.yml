@@ -164,11 +164,11 @@ jobs:
 
       - name: Install and test Homebrew Formula
         run: |
-          brew style package-release/tmh.rb
-          brew audit --strict --online package-release/tmh.rb
           brew tap-new --no-git tmh-test/tap
           tap_dir="$(brew --repository tmh-test/tap)"
           install -m 0644 package-release/tmh.rb "$tap_dir/Formula/tmh.rb"
+          brew style tmh-test/tap/tmh
+          brew audit --strict --online tmh-test/tap/tmh
           brew install tmh-test/tap/tmh
           brew test tmh-test/tap/tmh
           test "$(tmh --version)" = "${{ needs.resolve.outputs.bare_version }}"
