@@ -62,9 +62,11 @@ jobs:
           release_state="$(gh release view "$version" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')"
           test "$release_state" = $'false\tfalse'
 
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "bare_version=${version#v}" >> "$GITHUB_OUTPUT"
-          echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "bare_version=${version#v}"
+            echo "tag_sha=$tag_sha"
+          } >> "$GITHUB_OUTPUT"
 
   prepare:
     needs: resolve
