@@ -8,25 +8,26 @@ fi
 
 version="$1"
 checksums="$2"
+repo_dir="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+. "$repo_dir/scripts/release-lib.sh"
 
-if ! printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-  printf 'invalid release version: %s\n' "$version" >&2
-  exit 2
-fi
+version="$(release_normalize_version "$version")"
 
 [ -f "$checksums" ] || { printf 'checksums file not found: %s\n' "$checksums" >&2; exit 1; }
 
 checksum() {
-  archive="$1"
-  value="$(awk -v archive="$archive" '$2 == archive { print $1 }' "$checksums")"
-  [ -n "$value" ] || { printf 'checksum not found for %s\n' "$archive" >&2; exit 1; }
-  printf '%s' "$value"
+  archive="$(release_archive_name "$1")"
+  release_checksum_for "$checksums" "$archive"
 }
 
-darwin_amd64="$(checksum tmh_darwin_amd64.tar.gz)"
-darwin_arm64="$(checksum tmh_darwin_arm64.tar.gz)"
-linux_amd64="$(checksum tmh_linux_amd64.tar.gz)"
-linux_arm64="$(checksum tmh_linux_arm64.tar.gz)"
+darwin_amd64_archive="$(release_archive_name darwin_amd64)"
+darwin_arm64_archive="$(release_archive_name darwin_arm64)"
+linux_amd64_archive="$(release_archive_name linux_amd64)"
+linux_arm64_archive="$(release_archive_name linux_arm64)"
+darwin_amd64="$(checksum darwin_amd64)"
+darwin_arm64="$(checksum darwin_arm64)"
+linux_amd64="$(checksum linux_amd64)"
+linux_arm64="$(checksum linux_arm64)"
 bare_version="${version#v}"
 release_url="https://github.com/AllenReder/tmh/releases/download/$version"
 
@@ -39,20 +40,20 @@ class Tmh < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "$release_url/tmh_darwin_arm64.tar.gz"
+      url "$release_url/$darwin_arm64_archive"
       sha256 "$darwin_arm64"
     else
-      url "$release_url/tmh_darwin_amd64.tar.gz"
+      url "$release_url/$darwin_amd64_archive"
       sha256 "$darwin_amd64"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "$release_url/tmh_linux_arm64.tar.gz"
+      url "$release_url/$linux_arm64_archive"
       sha256 "$linux_arm64"
     else
-      url "$release_url/tmh_linux_amd64.tar.gz"
+      url "$release_url/$linux_amd64_archive"
       sha256 "$linux_amd64"
     end
   end

@@ -28,7 +28,21 @@ case "$(uname -m)" in
 esac
 
 archive="tmh_${os}_${arch}.tar.gz"
-base_url="https://github.com/$REPO/releases/latest/download"
+requested_version="${TMH_VERSION:-}"
+expected_version=""
+if [ -n "$requested_version" ]; then
+  case "$requested_version" in
+    v*) version="$requested_version" ;;
+    *) version="v$requested_version" ;;
+  esac
+  if ! printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+    fail "TMH_VERSION must use vMAJOR.MINOR.PATCH"
+  fi
+  expected_version="${version#v}"
+  base_url="https://github.com/$REPO/releases/download/$version"
+else
+  base_url="https://github.com/$REPO/releases/latest/download"
+fi
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
 
@@ -50,11 +64,19 @@ fi
 tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
 [ -x "$tmp_dir/tmh" ] || fail "release archive did not contain tmh"
 [ -f "$tmp_dir/tmh.zsh" ] || fail "release archive did not contain tmh.zsh"
+if [ -n "$expected_version" ]; then
+  actual_version="$("$tmp_dir/tmh" --version)"
+  [ "$actual_version" = "$expected_version" ] || fail "downloaded tmh version is $actual_version, expected $expected_version"
+fi
 
 mkdir -p "$INSTALL_DIR" "$SHELL_DIR"
 install -m 0755 "$tmp_dir/tmh" "$INSTALL_DIR/tmh"
 ln -sf tmh "$INSTALL_DIR/tmha"
 install -m 0644 "$tmp_dir/tmh.zsh" "$SHELL_DIR/tmh.zsh"
+if [ -n "$expected_version" ]; then
+  installed_version="$("$INSTALL_DIR/tmh" --version)"
+  [ "$installed_version" = "$expected_version" ] || fail "installed tmh version is $installed_version, expected $expected_version"
+fi
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;

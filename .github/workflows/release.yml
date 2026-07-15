@@ -23,10 +23,9 @@ jobs:
       - name: Validate release tag
         shell: bash
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tags must use vMAJOR.MINOR.PATCH." >&2
-            exit 1
-          fi
+          set -euo pipefail
+          . scripts/release-lib.sh
+          test "$(release_normalize_version "$GITHUB_REF_NAME")" = "$GITHUB_REF_NAME"
 
       - name: Verify tag commit is on main
         run: |
@@ -46,43 +45,18 @@ jobs:
       - name: Install Zsh
         run: sudo apt-get update && sudo apt-get install -y zsh
 
-      - name: Test
-        run: go test -race -timeout 2m ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Check formatting
-        run: test -z "$(gofmt -l $(find . -type f -name '*.go'))"
-
-      - name: Validate shell and installer
-        run: |
-          zsh -n shell/tmh.zsh
-          zsh shell/tmh.zsh.test.zsh
-          sh -n install.sh
-          sh tests/install.test.sh
-
-      - name: Test package distributions
-        run: |
-          npm test --prefix npm
-          sh tests/packages.test.sh
-
-      - name: Scan Go vulnerabilities
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
-
-      - name: Validate GoReleaser configuration
+      - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           distribution: goreleaser
           version: v2.15.2
-          args: check
+          install-only: true
 
-      - name: Build release snapshot
-        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
-        with:
-          distribution: goreleaser
-          version: v2.15.2
-          args: release --snapshot --clean
+      - name: Check
+        run: make check
+
+      - name: Build and verify release snapshot
+        run: make release-check VERSION="$GITHUB_REF_NAME"
 
   release:
     needs: verify
@@ -114,6 +88,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.ref_name }}
+
       - name: Download release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,12 +101,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --dir release-assets
 
-      - name: Verify expected assets and checksums
-        working-directory: release-assets
-        run: |
-          test -f checksums.txt
-          test -f tmh_darwin_amd64.tar.gz
-          test -f tmh_darwin_arm64.tar.gz
-          test -f tmh_linux_amd64.tar.gz
-          test -f tmh_linux_arm64.tar.gz
-          sha256sum --check checksums.txt
+      - name: Verify release assets
+        run: scripts/verify-release-assets.sh release-assets "$GITHUB_REF_NAME"

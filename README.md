@@ -49,6 +49,12 @@ You can also use the standalone installer:
 curl -fsSL https://raw.githubusercontent.com/AllenReder/tmh/main/install.sh | sh
 ```
 
+To install a specific stable version instead of the latest release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/AllenReder/tmh/main/install.sh | TMH_VERSION=v0.1.2 sh
+```
+
 The installer places `tmh` and `tmha` in `~/.local/bin` and asks before
 enabling Zsh integration in `~/.zshrc`.
 

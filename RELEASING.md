@@ -1,204 +1,117 @@
 # Releasing tmh
 
-GitHub Releases are the source of truth for every tmh binary. A successful
-GitHub Release is followed by npm publication and an update to the official
-Homebrew tap. The downstream packages must contain the exact binaries from the
-published GitHub archives.
+GitHub Releases are the source of truth for every tmh binary. npm and the
+official Homebrew tap distribute the exact binaries from the same verified
+GitHub Release assets.
 
-Release automation is implemented by:
+## Stable interfaces
 
-- `.github/workflows/release.yml` for GitHub assets.
-- `.github/workflows/publish-packages.yml` for npm and Homebrew.
-- `.goreleaser.yaml` for the supported binary matrix and archives.
+- `make check` runs the complete source, distribution, security, workflow, and
+  release-configuration checks.
+- `make release-check VERSION=vMAJOR.MINOR.PATCH` builds and verifies a local
+  snapshot, npm package, and Homebrew Formula. It does not push, tag, publish,
+  or use release credentials.
+- `scripts/release.sh vMAJOR.MINOR.PATCH` performs the complete stable release
+  after all prerequisites are configured.
+
+All release versions are immutable. Git tags and GitHub Releases use
+`vMAJOR.MINOR.PATCH`; npm and Homebrew use `MAJOR.MINOR.PATCH`. Prereleases are
+not accepted.
 
 ## Prerequisites
 
-- Release permission for `AllenReder/tmh`.
-- A configured `release` GitHub Environment.
-- `git`, `gh`, Go 1.25.12, Node.js 22 or newer, npm, Ruby, Zsh, and
-  GoReleaser 2.15.2 available locally.
-- A clean, up-to-date `main` branch with required CI checks passing.
-- The `HOMEBREW_TAP_DEPLOY_KEY` Environment secret configured as a write-enabled
-  deploy key for `AllenReder/homebrew-tap`.
-- npm Trusted Publishing configured for `@allenreder/tmh`, workflow
-  `publish-packages.yml`, Environment `release`, and the `npm publish` action.
+- A clean, synchronized `main` branch for `AllenReder/tmh`.
+- GitHub CLI authentication with administrator access to the repository.
+- The `release` GitHub Environment.
+- `HOMEBREW_TAP_DEPLOY_KEY` in that Environment, restricted to write access for
+  `AllenReder/homebrew-tap`.
+- npm Trusted Publishing for `@allenreder/tmh`, restricted to repository
+  `AllenReder/tmh`, workflow `publish-packages.yml`, Environment `release`, and
+  the `npm publish` action.
+- No npm token, `NODE_AUTH_TOKEN`, or token fallback in the repository or
+  release Environment.
+- Local `git`, `gh`, Go, Node.js 22 or newer, npm, Ruby, Zsh, GoReleaser,
+  OpenSSL, curl, tar, and ripgrep.
 
-Authenticate and confirm repository access before starting:
+Confirm access before starting:
 
 ```sh
 gh auth status
-npm whoami
 git remote -v
 ```
 
-## Versioning
+## Local validation
 
-All channels use the same stable Semantic Version:
-
-```text
-Git tag and GitHub Release: vMAJOR.MINOR.PATCH
-npm package and Homebrew Formula: MAJOR.MINOR.PATCH
-```
-
-Published tags and npm versions are immutable. Never move, replace, or reuse a
-released version.
-
-## Prepare the release
-
-Set and validate the version:
-
-```sh
-version=v0.1.1
-printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
-```
-
-Update and verify `main`:
-
-```sh
-git switch main
-git fetch origin --tags
-git pull --ff-only origin main
-test -z "$(git status --porcelain)"
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-test -z "$(git tag --list "$version")"
-```
-
-Confirm that the version is unused in every channel:
-
-```sh
-! gh release view "$version" >/dev/null 2>&1
-! npm view "@allenreder/tmh@${version#v}" version >/dev/null 2>&1
-```
-
-Run all deterministic checks and build a release snapshot:
+Run the same deterministic interfaces used by CI and the Release workflow:
 
 ```sh
 make check
-goreleaser release --snapshot --clean
+make release-check VERSION=v0.1.3
 ```
 
-Verify the snapshot assets and package assembly:
-
-```sh
-test -f dist/checksums.txt
-test -f dist/tmh_darwin_amd64.tar.gz
-test -f dist/tmh_darwin_arm64.tar.gz
-test -f dist/tmh_linux_amd64.tar.gz
-test -f dist/tmh_linux_arm64.tar.gz
-scripts/prepare-release-packages.sh "$version" dist dist/packages
-test -f "dist/packages/allenreder-tmh-${version#v}.tgz"
-test -f dist/packages/tmh.rb
-```
+The snapshot command verifies all four archives, `checksums.txt`, archive
+contents and permissions, the assembled npm package, both command launchers,
+and the generated Homebrew Formula. Snapshot binaries keep GoReleaser's
+snapshot version and are not required to report the future release version.
 
 ## Publish
 
-Verify the worktree once more, then create and push an annotated tag:
+Run the tracked release entry point from the repository:
 
 ```sh
-test -z "$(git status --porcelain)"
-git tag -a "$version" -m "Release $version"
-git push origin "$version"
+scripts/release.sh v0.1.3
 ```
 
-The `Release` workflow validates the tag, repeats all checks, publishes the
-GitHub Release, and verifies the five release assets. When it completes, the
-`Publish packages` workflow:
+Before creating a tag, the script verifies the repository, permissions,
+Environment, Homebrew key, npm OIDC-only configuration, and that the version is
+unused locally, on the remote, in GitHub Releases, and in npm. It then runs both
+local validation interfaces, pushes `main`, and waits for CI on the exact
+commit.
 
-1. Downloads and verifies the GitHub Release assets.
-2. Builds the npm tarball and Homebrew Formula from those assets.
-3. Installs both packages on macOS and Linux.
-4. Publishes npm through OIDC Trusted Publishing.
-5. Updates `AllenReder/homebrew-tap` using its repository-scoped deploy key.
-6. Verifies registry integrity and the published Formula contents.
+Only after CI succeeds does it create and push the annotated tag. The `Release`
+workflow publishes the GitHub assets, and `Publish packages` publishes or
+verifies npm and Homebrew. The script waits for both workflows and performs
+post-publication asset, installer, npm integrity, provenance, and Formula
+verification.
 
-Monitor both workflows:
+## Workflow responsibilities
 
-```sh
-gh run list --workflow release.yml --branch "$version" --limit 1
-gh run list --workflow publish-packages.yml --limit 5
-```
+- `.github/workflows/ci.yml` prepares the supported toolchain and runs
+  `make check` on macOS and Linux.
+- `.github/workflows/release.yml` independently runs `make check` and
+  `make release-check`, publishes the GitHub Release through GoReleaser, and
+  verifies the downloaded assets.
+- `.github/workflows/publish-packages.yml` assembles packages from the target
+  tag and verified Release assets, tests npm and Homebrew on macOS and Linux,
+  publishes through scoped credentials, and verifies the public channels.
 
-Inspect failed steps with:
-
-```sh
-gh run view RUN_ID --log-failed
-```
-
-## Verify the release
-
-Inspect the GitHub Release and download all assets:
-
-```sh
-gh release view "$version" --json tagName,url,isDraft,isPrerelease,assets
-verify_dir="$(mktemp -d)"
-gh release download "$version" --dir "$verify_dir"
-```
-
-Verify checksums:
-
-```sh
-(
-  cd "$verify_dir"
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum --check checksums.txt
-  else
-    shasum -a 256 --check checksums.txt
-  fi
-)
-```
-
-Verify the standalone installer:
-
-```sh
-install_root="$(mktemp -d)"
-TMH_INSTALL_DIR="$install_root/bin" TMH_INSTALL_ZSH=0 sh install.sh
-test "$("$install_root/bin/tmh" --version)" = "${version#v}"
-test -L "$install_root/bin/tmha"
-```
-
-Verify npm in an isolated prefix:
-
-```sh
-test "$(npm view "@allenreder/tmh@${version#v}" version)" = "${version#v}"
-npm_root="$(mktemp -d)"
-npm install --ignore-scripts --no-audit --no-fund \
-  --prefix "$npm_root" "@allenreder/tmh@${version#v}"
-test "$("$npm_root/node_modules/.bin/tmh" --version)" = "${version#v}"
-test "$("$npm_root/node_modules/.bin/tmha" --version)" = "${version#v}"
-```
-
-Verify Homebrew:
-
-```sh
-brew update
-brew install AllenReder/tap/tmh
-brew test AllenReder/tap/tmh
-test "$(tmh --version)" = "${version#v}"
-test "$(tmha --version)" = "${version#v}"
-```
-
-## npm authentication
-
-The npm package is published only through OIDC Trusted Publishing. The trusted
-publisher is restricted to `AllenReder/tmh`, workflow
-`publish-packages.yml`, Environment `release`, and the `npm publish` action.
-
-Do not add an npm token, `NODE_AUTH_TOKEN`, or an npm credential secret to the
-repository or the `release` Environment. If the trusted publisher configuration
-must be replaced, update it in npm before changing the workflow and verify the
-next real release through its provenance attestation.
+The package workflow can be safely retried for an existing version. Existing
+npm content and Formula content must match exactly before a publish step is
+skipped.
 
 ## Failure recovery
 
-- Before a tag is pushed, delete only the local tag, fix the problem, and
-  repeat all checks.
-- After a tag is pushed, never move or overwrite it.
-- A transient npm, Homebrew, or network failure can be retried with the manual
-  `Publish packages` workflow for the same version. It verifies existing
-  content before skipping any publication.
-- If npm already contains the version with different integrity, stop. npm
-  versions cannot be overwritten; investigate and publish a fixed patch
+- Before the tag is pushed, fix the failure and rerun the release command. No
+  release version has been consumed.
+- After the tag is pushed, never move, replace, or delete it to reuse the
   version.
-- A Formula publishing error may be corrected in the tap only when it still
-  references the unchanged, verified GitHub Release assets.
-- Any source or binary change requires a new patch release.
+- If GitHub Release creation fails because of source or binary behavior, fix
+  forward with a new patch version.
+- For a transient npm, Homebrew, or network failure, inspect the failed run and
+  retry only the downstream package workflow for the same immutable Release:
+
+  ```sh
+  gh workflow run publish-packages.yml --repo AllenReder/tmh --ref main -f version=v0.1.3
+  ```
+
+- If npm already contains the version with different integrity, stop. npm
+  versions cannot be overwritten.
+- A Formula may be corrected only when it continues to reference the unchanged,
+  verified GitHub Release assets.
+- Any source or binary change requires a new patch version.
+
+Inspect workflow failures with:
+
+```sh
+gh run view RUN_ID --repo AllenReder/tmh --log-failed
+```

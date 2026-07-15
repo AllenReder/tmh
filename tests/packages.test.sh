@@ -33,6 +33,13 @@ func main() {
 		fmt.Println("1.2.3")
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--help" {
+		fmt.Println("usage")
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--tmh-invalid-option" {
+		os.Exit(2)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "exit7" {
 		os.Exit(7)
 	}
@@ -46,6 +53,7 @@ install -m 0644 "$repo_dir/THIRD_PARTY_NOTICES.md" "$fixture_dir/THIRD_PARTY_NOT
 install -m 0644 "$repo_dir/README.md" "$fixture_dir/README.md"
 install -m 0644 "$repo_dir/README.zh-CN.md" "$fixture_dir/README.zh-CN.md"
 install -m 0644 "$repo_dir/shell/tmh.zsh" "$fixture_dir/tmh.zsh"
+install -m 0644 "$repo_dir/examples/config.toml" "$fixture_dir/config.example.toml"
 
 for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
   tar -czf "$assets_dir/tmh_${platform}.tar.gz" -C "$fixture_dir" .

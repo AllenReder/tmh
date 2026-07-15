@@ -43,16 +43,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          . scripts/release-lib.sh
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             version="$WORKFLOW_VERSION"
           else
             version="$INPUT_VERSION"
           fi
-          [[ "$version" == v* ]] || version="v$version"
-          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "Version must use vMAJOR.MINOR.PATCH." >&2
-            exit 1
-          }
+          version="$(release_normalize_version "$version")"
 
           git fetch origin main --tags
           tag_sha="$(git rev-list -n 1 "$version^{commit}")"
@@ -74,9 +71,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.resolve.outputs.version }}
-          fetch-depth: 0
+          path: release-source
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -95,20 +94,18 @@ jobs:
           mkdir release-assets
           gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" --dir release-assets
 
-      - name: Assemble npm package and Homebrew Formula
+      - name: Assemble verified npm package and Homebrew Formula
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
+          TMH_RELEASE_SOURCE_DIR: ${{ github.workspace }}/release-source
         run: scripts/prepare-release-packages.sh "$VERSION" release-assets package-release
 
-      - name: Verify package contents and Linux executable
+      - name: Verify npm package and Formula structure
         env:
-          VERSION: ${{ needs.resolve.outputs.bare_version }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          BARE_VERSION: ${{ needs.resolve.outputs.bare_version }}
         run: |
-          npm test --prefix npm
-          install_root="$(mktemp -d)"
-          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/allenreder-tmh-$VERSION.tgz"
-          test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
-          test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
+          scripts/verify-npm-package.sh "$VERSION" "package-release/allenreder-tmh-$BARE_VERSION.tgz"
           ruby -c package-release/tmh.rb
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -127,6 +124,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
@@ -139,12 +138,9 @@ jobs:
 
       - name: Install and test npm package
         env:
-          VERSION: ${{ needs.resolve.outputs.bare_version }}
-        run: |
-          install_root="$(mktemp -d)"
-          npm install --ignore-scripts --no-audit --no-fund --prefix "$install_root" "./package-release/allenreder-tmh-$VERSION.tgz"
-          test "$("$install_root/node_modules/.bin/tmh" --version)" = "$VERSION"
-          test "$("$install_root/node_modules/.bin/tmha" --version)" = "$VERSION"
+          VERSION: ${{ needs.resolve.outputs.version }}
+          BARE_VERSION: ${{ needs.resolve.outputs.bare_version }}
+        run: scripts/verify-npm-package.sh "$VERSION" "package-release/allenreder-tmh-$BARE_VERSION.tgz"
 
   test-homebrew:
     needs: [resolve, prepare]
@@ -182,6 +178,8 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
@@ -202,8 +200,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          . scripts/release-lib.sh
           package="./package-release/allenreder-tmh-$VERSION.tgz"
-          expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
+          expected_integrity="$(release_sha512_integrity "$package")"
           if published_integrity="$(npm view "@allenreder/tmh@$VERSION" dist.integrity 2>/dev/null)"; then
             test "$published_integrity" = "$expected_integrity"
             echo "@allenreder/tmh@$VERSION is already published with the expected integrity."
@@ -270,6 +269,8 @@ jobs:
     needs: [resolve, publish-npm, publish-homebrew]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
@@ -282,20 +283,6 @@ jobs:
 
       - name: Verify published package channels
         env:
-          VERSION: ${{ needs.resolve.outputs.bare_version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          package="./package-release/allenreder-tmh-$VERSION.tgz"
-          expected_integrity="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
-          test "$(npm view "@allenreder/tmh@$VERSION" version)" = "$VERSION"
-          test "$(npm view "@allenreder/tmh@$VERSION" dist.integrity)" = "$expected_integrity"
-
-          for attempt in {1..12}; do
-            if curl -fsSL "https://raw.githubusercontent.com/AllenReder/homebrew-tap/main/Formula/tmh.rb" -o published-tmh.rb && cmp -s package-release/tmh.rb published-tmh.rb; then
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "Published Homebrew Formula does not match the tested Formula." >&2
-          exit 1
+          VERSION: ${{ needs.resolve.outputs.version }}
+          BARE_VERSION: ${{ needs.resolve.outputs.bare_version }}
+        run: scripts/verify-published-packages.sh "$VERSION" "package-release/allenreder-tmh-$BARE_VERSION.tgz" package-release/tmh.rb

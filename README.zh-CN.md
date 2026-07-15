@@ -49,6 +49,12 @@ npm install -g @allenreder/tmh
 curl -fsSL https://raw.githubusercontent.com/AllenReder/tmh/main/install.sh | sh
 ```
 
+如需安装指定的稳定版本而不是最新版：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/AllenReder/tmh/main/install.sh | TMH_VERSION=v0.1.2 sh
+```
+
 安装器会把 `tmh` 和 `tmha` 放到 `~/.local/bin`，并在修改
 `~/.zshrc` 启用 Zsh 集成前询问用户。
 
