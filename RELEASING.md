@@ -177,22 +177,16 @@ test "$(tmh --version)" = "${version#v}"
 test "$(tmha --version)" = "${version#v}"
 ```
 
-## First npm publication
+## npm authentication
 
-Trusted Publishing can only be configured after the npm package exists. For
-the first npm version only:
+The npm package is published only through OIDC Trusted Publishing. The trusted
+publisher is restricted to `AllenReder/tmh`, workflow
+`publish-packages.yml`, Environment `release`, and the `npm publish` action.
 
-1. Create a short-lived granular npm token with publish access.
-2. Store it as `NPM_BOOTSTRAP_TOKEN` in the `release` Environment.
-3. Publish the first package through `publish-packages.yml` with provenance.
-4. Configure the npm Trusted Publisher using the repository, workflow, and
-   Environment listed in the prerequisites.
-5. Require two-factor authentication and disallow token publication for the
-   package.
-6. Revoke the token, delete the GitHub secret, and remove the bootstrap token
-   fallback from the workflow.
-
-Never print or commit the token.
+Do not add an npm token, `NODE_AUTH_TOKEN`, or an npm credential secret to the
+repository or the `release` Environment. If the trusted publisher configuration
+must be replaced, update it in npm before changing the workflow and verify the
+next real release through its provenance attestation.
 
 ## Failure recovery
 

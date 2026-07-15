@@ -198,7 +198,6 @@ jobs:
 
       - name: Publish or verify npm package
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
           VERSION: ${{ needs.resolve.outputs.bare_version }}
         shell: bash
         run: |
