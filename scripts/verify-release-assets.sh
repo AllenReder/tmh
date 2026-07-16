@@ -31,9 +31,12 @@ trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
 for archive in $(release_archive_names); do
   archive_dir="$tmp_dir/${archive%.tar.gz}"
   mkdir -p "$archive_dir"
+  if tar -tzf "$assets_dir/$archive" | grep -Eq '(^|/)(tmha|tmh\.zsh)$'; then
+    release_fail "$archive contains a legacy tmha or standalone tmh.zsh artifact"
+  fi
   tar -xzf "$assets_dir/$archive" -C "$archive_dir"
   [ -x "$archive_dir/tmh" ] || release_fail "$archive does not contain executable tmh"
-  for packaged_file in LICENSE THIRD_PARTY_NOTICES.md README.md README.zh-CN.md tmh.zsh config.example.toml; do
+  for packaged_file in LICENSE THIRD_PARTY_NOTICES.md README.md README.zh-CN.md config.example.toml; do
     [ -f "$archive_dir/$packaged_file" ] || release_fail "$archive does not contain $packaged_file"
   done
 done

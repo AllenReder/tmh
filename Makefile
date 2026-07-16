@@ -19,8 +19,9 @@ check: test test-packages
 	@files="$$(gofmt -l $$(find . -type f -name '*.go'))"; \
 		test -z "$$files" || { printf 'Go files need gofmt:\n%s\n' "$$files" >&2; exit 1; }
 	go vet ./...
-	zsh -n shell/tmh.zsh
-	zsh shell/tmh.zsh.test.zsh
+	zsh -n internal/shellinit/scripts/tmh.zsh
+	bash -n internal/shellinit/scripts/tmh.bash
+	@if command -v fish >/dev/null 2>&1; then fish --no-config --no-execute internal/shellinit/scripts/tmh.fish; else printf 'Skipping Fish syntax check (fish not installed).\n'; fi
 	sh -n install.sh scripts/release-lib.sh scripts/prepare-release-packages.sh scripts/render-homebrew-formula.sh scripts/verify-release-assets.sh scripts/verify-npm-package.sh scripts/verify-published-packages.sh tests/*.sh
 	bash -n scripts/release.sh
 	sh tests/install.test.sh

@@ -20,9 +20,9 @@ test("rejects unsupported platforms and architectures", () => {
 });
 
 test("preserves command name, arguments, and inherited stdio", () => {
-  const spec = invocation({ command: "tmha", args: ["config", "show"], platform: "linux", arch: "x64", root });
+  const spec = invocation({ args: ["config", "show"], platform: "linux", arch: "x64", root });
   assert.deepEqual(spec.args, ["config", "show"]);
-  assert.equal(spec.options.argv0, "tmha");
+  assert.equal(spec.options.argv0, "tmh");
   assert.equal(spec.options.stdio, "inherit");
 });
 
@@ -43,7 +43,6 @@ test("forwards signals and child exit codes", () => {
 
   const calls = [];
   launch({
-    command: "tmh",
     args: ["version"],
     platform: "linux",
     arch: "x64",
@@ -75,7 +74,6 @@ test("re-raises a terminating child signal after cleanup", () => {
   child.kill = () => true;
 
   launch({
-    command: "tmha",
     platform: "darwin",
     arch: "arm64",
     root,
@@ -100,7 +98,6 @@ test("reports child startup failures", () => {
   child.kill = () => true;
 
   launch({
-    command: "tmh",
     platform: "linux",
     arch: "x64",
     root,

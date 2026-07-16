@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -10,39 +11,45 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AllenReder/tmh/internal/command"
 	toml "github.com/pelletier/go-toml/v2"
 )
 
 const (
-	DefaultBaseURL       = "https://api.openai.com/v1"
-	DefaultTMHTimeout    = 30 * time.Second
-	DefaultTMHATimeout   = 90 * time.Second
-	defaultConfigDirName = "tmh"
-	defaultConfigName    = "config.toml"
+	DefaultBaseURL         = "https://api.openai.com/v1"
+	DefaultShell           = command.Auto
+	DefaultGenerateTimeout = 30 * time.Second
+	DefaultAgentTimeout    = 90 * time.Second
+	defaultConfigDirName   = "tmh"
+	defaultConfigName      = "config.toml"
+	maxConfigBytes         = 1 << 20
 )
 
 type fileConfig struct {
-	BaseURL            string `toml:"base_url"`
-	Model              string `toml:"model"`
-	TMHTimeoutSeconds  int    `toml:"tmh_timeout_seconds"`
-	TMHATimeoutSeconds int    `toml:"tmha_timeout_seconds"`
+	BaseURL                string  `toml:"base_url"`
+	Model                  string  `toml:"model"`
+	Shell                  *string `toml:"shell"`
+	GenerateTimeoutSeconds *int    `toml:"generate_timeout_seconds"`
+	AgentTimeoutSeconds    *int    `toml:"agent_timeout_seconds"`
 }
 
 // Overrides are explicit command-line values. Empty strings mean unset.
 type Overrides struct {
 	BaseURL string
 	Model   string
+	Shell   string
 }
 
 // Config is the effective runtime configuration.
 type Config struct {
-	Path        string
-	BaseURL     string
-	Model       string
-	APIKey      string
-	TMHTimeout  time.Duration
-	TMHATimeout time.Duration
-	Sources     map[string]string
+	Path            string
+	BaseURL         string
+	Model           string
+	Shell           command.Shell
+	APIKey          string
+	GenerateTimeout time.Duration
+	AgentTimeout    time.Duration
+	Sources         map[string]string
 }
 
 func Path() (string, error) {
@@ -63,16 +70,18 @@ func Load(overrides Overrides, requireModel bool) (Config, error) {
 	}
 
 	cfg := Config{
-		Path:        path,
-		BaseURL:     DefaultBaseURL,
-		TMHTimeout:  DefaultTMHTimeout,
-		TMHATimeout: DefaultTMHATimeout,
+		Path:            path,
+		BaseURL:         DefaultBaseURL,
+		Shell:           DefaultShell,
+		GenerateTimeout: DefaultGenerateTimeout,
+		AgentTimeout:    DefaultAgentTimeout,
 		Sources: map[string]string{
-			"base_url":     "default",
-			"model":        "unset",
-			"tmh_timeout":  "default",
-			"tmha_timeout": "default",
-			"api_key":      "unset",
+			"base_url":         "default",
+			"model":            "unset",
+			"shell":            "default",
+			"generate_timeout": "default",
+			"agent_timeout":    "default",
+			"api_key":          "unset",
 		},
 	}
 
@@ -84,6 +93,11 @@ func Load(overrides Overrides, requireModel bool) (Config, error) {
 
 	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
 	cfg.Model = strings.TrimSpace(cfg.Model)
+	parsedShell, err := command.ParseShell(string(cfg.Shell))
+	if err != nil {
+		return Config{}, fmt.Errorf("shell from %s: %w", cfg.Sources["shell"], err)
+	}
+	cfg.Shell = parsedShell
 	if err := validate(cfg, requireModel); err != nil {
 		return Config{}, err
 	}
@@ -100,8 +114,16 @@ func applyFile(cfg *Config, path string) error {
 	}
 	defer f.Close()
 
+	data, err := io.ReadAll(io.LimitReader(f, maxConfigBytes+1))
+	if err != nil {
+		return fmt.Errorf("read config %s: %w", path, err)
+	}
+	if len(data) > maxConfigBytes {
+		return fmt.Errorf("config %s exceeds the %d byte safety limit", path, maxConfigBytes)
+	}
+
 	var fc fileConfig
-	decoder := toml.NewDecoder(io.LimitReader(f, 1<<20))
+	decoder := toml.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&fc); err != nil {
 		return fmt.Errorf("parse config %s: %w", path, err)
@@ -114,13 +136,23 @@ func applyFile(cfg *Config, path string) error {
 		cfg.Model = fc.Model
 		cfg.Sources["model"] = path
 	}
-	if fc.TMHTimeoutSeconds != 0 {
-		cfg.TMHTimeout = time.Duration(fc.TMHTimeoutSeconds) * time.Second
-		cfg.Sources["tmh_timeout"] = path
+	if fc.Shell != nil {
+		cfg.Shell = command.Shell(strings.TrimSpace(*fc.Shell))
+		cfg.Sources["shell"] = path
 	}
-	if fc.TMHATimeoutSeconds != 0 {
-		cfg.TMHATimeout = time.Duration(fc.TMHATimeoutSeconds) * time.Second
-		cfg.Sources["tmha_timeout"] = path
+	if fc.GenerateTimeoutSeconds != nil {
+		if *fc.GenerateTimeoutSeconds < 1 || *fc.GenerateTimeoutSeconds > 1800 {
+			return fmt.Errorf("generate_timeout_seconds must be between 1 and 1800")
+		}
+		cfg.GenerateTimeout = time.Duration(*fc.GenerateTimeoutSeconds) * time.Second
+		cfg.Sources["generate_timeout"] = path
+	}
+	if fc.AgentTimeoutSeconds != nil {
+		if *fc.AgentTimeoutSeconds < 1 || *fc.AgentTimeoutSeconds > 1800 {
+			return fmt.Errorf("agent_timeout_seconds must be between 1 and 1800")
+		}
+		cfg.AgentTimeout = time.Duration(*fc.AgentTimeoutSeconds) * time.Second
+		cfg.Sources["agent_timeout"] = path
 	}
 	return nil
 }
@@ -133,6 +165,10 @@ func applyEnvironment(cfg *Config) {
 	if value := strings.TrimSpace(os.Getenv("TMH_MODEL")); value != "" {
 		cfg.Model = value
 		cfg.Sources["model"] = "TMH_MODEL"
+	}
+	if value := strings.TrimSpace(os.Getenv("TMH_SHELL")); value != "" {
+		cfg.Shell = command.Shell(value)
+		cfg.Sources["shell"] = "TMH_SHELL"
 	}
 	if value, ok := os.LookupEnv("TMH_API_KEY"); ok {
 		cfg.APIKey = value
@@ -152,6 +188,10 @@ func applyOverrides(cfg *Config, overrides Overrides) {
 		cfg.Model = value
 		cfg.Sources["model"] = "--model"
 	}
+	if value := strings.TrimSpace(overrides.Shell); value != "" {
+		cfg.Shell = command.Shell(value)
+		cfg.Sources["shell"] = "--shell"
+	}
 }
 
 func validate(cfg Config, requireModel bool) error {
@@ -165,11 +205,11 @@ func validate(cfg Config, requireModel bool) error {
 	if requireModel && cfg.Model == "" {
 		return fmt.Errorf("model is required; set it in %s, TMH_MODEL, or --model", cfg.Path)
 	}
-	if cfg.TMHTimeout <= 0 || cfg.TMHTimeout > 30*time.Minute {
-		return fmt.Errorf("tmh_timeout_seconds must be between 1 and 1800")
+	if cfg.GenerateTimeout <= 0 || cfg.GenerateTimeout > 30*time.Minute {
+		return fmt.Errorf("generate_timeout_seconds must be between 1 and 1800")
 	}
-	if cfg.TMHATimeout <= 0 || cfg.TMHATimeout > 30*time.Minute {
-		return fmt.Errorf("tmha_timeout_seconds must be between 1 and 1800")
+	if cfg.AgentTimeout <= 0 || cfg.AgentTimeout > 30*time.Minute {
+		return fmt.Errorf("agent_timeout_seconds must be between 1 and 1800")
 	}
 	return nil
 }

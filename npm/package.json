@@ -18,17 +18,17 @@
     "terminal",
     "shell",
     "zsh",
+    "bash",
+    "fish",
     "openai"
   ],
   "bin": {
-    "tmh": "bin/tmh.mjs",
-    "tmha": "bin/tmha.mjs"
+    "tmh": "bin/tmh.mjs"
   },
   "files": [
     "bin/",
     "lib/",
     "vendor/",
-    "shell/",
     "README.md",
     "README.zh-CN.md",
     "LICENSE",

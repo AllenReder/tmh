@@ -60,20 +60,21 @@ class Tmh < Formula
 
   def install
     bin.install "tmh"
-    bin.install_symlink "tmh" => "tmha"
-    pkgshare.install "tmh.zsh", "LICENSE", "THIRD_PARTY_NOTICES.md", "README.md", "README.zh-CN.md"
+    pkgshare.install "LICENSE", "THIRD_PARTY_NOTICES.md", "README.md", "README.zh-CN.md"
   end
 
   def caveats
     <<~EOS
-      To enable Zsh command insertion, add this line to ~/.zshrc:
-        source "#{pkgshare}/tmh.zsh"
+      To enable shell integration, add the matching line to your startup file:
+        Zsh: eval "\$(tmh shell init zsh)"
+        Bash: eval "\$(tmh shell init bash)"
+        Fish: tmh shell init fish | source
     EOS
   end
 
   test do
     assert_equal version.to_s, shell_output("#{bin}/tmh --version").strip
-    assert_equal version.to_s, shell_output("#{bin}/tmha --version").strip
+    assert_match "tmh", shell_output("#{bin}/tmh help")
   end
 end
 EOF

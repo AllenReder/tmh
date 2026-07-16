@@ -40,7 +40,6 @@ install -m 0644 "$repo_dir/LICENSE" "$fixture_dir/LICENSE"
 install -m 0644 "$repo_dir/THIRD_PARTY_NOTICES.md" "$fixture_dir/THIRD_PARTY_NOTICES.md"
 install -m 0644 "$repo_dir/README.md" "$fixture_dir/README.md"
 install -m 0644 "$repo_dir/README.zh-CN.md" "$fixture_dir/README.zh-CN.md"
-install -m 0644 "$repo_dir/shell/tmh.zsh" "$fixture_dir/tmh.zsh"
 install -m 0644 "$repo_dir/examples/config.toml" "$fixture_dir/config.example.toml"
 
 write_checksums() {
@@ -107,12 +106,36 @@ permission_dir="$tmp_dir/permission"
 write_archives "$permission_dir" "$permission_fixture"
 expect_failure executable-permission "$repo_dir/scripts/verify-release-assets.sh" "$permission_dir"
 
+legacy_alias_fixture="$tmp_dir/legacy-alias-fixture"
+cp -R "$fixture_dir" "$legacy_alias_fixture"
+ln -s tmh "$legacy_alias_fixture/tmha"
+legacy_alias_dir="$tmp_dir/legacy-alias"
+write_archives "$legacy_alias_dir" "$legacy_alias_fixture"
+expect_failure legacy-tmha "$repo_dir/scripts/verify-release-assets.sh" "$legacy_alias_dir"
+
+legacy_shell_fixture="$tmp_dir/legacy-shell-fixture"
+cp -R "$fixture_dir" "$legacy_shell_fixture"
+mkdir -p "$legacy_shell_fixture/shell"
+printf '%s\n' '# legacy standalone integration' > "$legacy_shell_fixture/shell/tmh.zsh"
+legacy_shell_dir="$tmp_dir/legacy-shell"
+write_archives "$legacy_shell_dir" "$legacy_shell_fixture"
+expect_failure legacy-tmh-zsh "$repo_dir/scripts/verify-release-assets.sh" "$legacy_shell_dir"
+
 package_dir="$tmp_dir/package"
 "$repo_dir/scripts/prepare-release-packages.sh" "$version" "$assets_dir" "$package_dir" >/dev/null
 package="$package_dir/allenreder-tmh-1.2.3.tgz"
 formula="$package_dir/tmh.rb"
 "$repo_dir/scripts/verify-npm-package.sh" "$version" "$package" >/dev/null
 expect_failure npm-manifest-version "$repo_dir/scripts/verify-npm-package.sh" v1.2.4 "$package"
+
+legacy_npm_root="$tmp_dir/legacy-npm-root"
+mkdir -p "$legacy_npm_root"
+tar -xzf "$package" -C "$legacy_npm_root"
+mkdir -p "$legacy_npm_root/package/shell"
+printf '%s\n' '# legacy standalone integration' > "$legacy_npm_root/package/shell/tmh.zsh"
+legacy_npm_package="$tmp_dir/legacy-npm.tgz"
+tar -czf "$legacy_npm_package" -C "$legacy_npm_root" package
+expect_failure legacy-npm-shell "$repo_dir/scripts/verify-npm-package.sh" "$version" "$legacy_npm_package"
 
 real_npm="$(command -v npm)"
 fake_bin="$tmp_dir/fake-bin"

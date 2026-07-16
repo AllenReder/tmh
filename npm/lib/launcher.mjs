@@ -31,27 +31,22 @@ export function resolveBinary({
 }
 
 export function invocation({
-  command,
   args = process.argv.slice(2),
   platform = process.platform,
   arch = process.arch,
   root = packageRoot
 }) {
-  if (command !== "tmh" && command !== "tmha") {
-    throw new Error(`unsupported command name: ${command}`);
-  }
   return {
     binary: resolveBinary({ platform, arch, root }),
     args: [...args],
     options: {
-      argv0: command,
+      argv0: "tmh",
       stdio: "inherit"
     }
   };
 }
 
 export function launch({
-  command,
   args = process.argv.slice(2),
   platform = process.platform,
   arch = process.arch,
@@ -59,7 +54,7 @@ export function launch({
   spawnImpl = spawn,
   parent = process
 }) {
-  const spec = invocation({ command, args, platform, arch, root });
+  const spec = invocation({ args, platform, arch, root });
   const child = spawnImpl(spec.binary, spec.args, spec.options);
   const signalHandlers = new Map();
 

@@ -52,7 +52,6 @@ install -m 0644 "$repo_dir/LICENSE" "$fixture_dir/LICENSE"
 install -m 0644 "$repo_dir/THIRD_PARTY_NOTICES.md" "$fixture_dir/THIRD_PARTY_NOTICES.md"
 install -m 0644 "$repo_dir/README.md" "$fixture_dir/README.md"
 install -m 0644 "$repo_dir/README.zh-CN.md" "$fixture_dir/README.zh-CN.md"
-install -m 0644 "$repo_dir/shell/tmh.zsh" "$fixture_dir/tmh.zsh"
 install -m 0644 "$repo_dir/examples/config.toml" "$fixture_dir/config.example.toml"
 
 for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
@@ -79,6 +78,11 @@ test -f "$output_dir/tmh.rb"
 cmp -s "$output_dir/allenreder-tmh-1.2.3.tgz" "$second_output_dir/allenreder-tmh-1.2.3.tgz"
 cmp -s "$output_dir/tmh.rb" "$second_output_dir/tmh.rb"
 ruby -c "$output_dir/tmh.rb" >/dev/null
+grep -Fq 'shell_output("#{bin}/tmh help")' "$output_dir/tmh.rb"
+if grep -Eq 'tmha|tmh\.zsh' "$output_dir/tmh.rb"; then
+  printf 'Homebrew Formula contains a legacy tmha or standalone Zsh artifact\n' >&2
+  exit 1
+fi
 
 for archive in tmh_darwin_amd64.tar.gz tmh_darwin_arm64.tar.gz tmh_linux_amd64.tar.gz tmh_linux_arm64.tar.gz; do
   hash="$(awk -v archive="$archive" '$2 == archive { print $1 }' "$assets_dir/checksums.txt")"
@@ -93,10 +97,8 @@ package/README.md
 package/README.zh-CN.md
 package/THIRD_PARTY_NOTICES.md
 package/bin/tmh.mjs
-package/bin/tmha.mjs
 package/lib/launcher.mjs
 package/package.json
-package/shell/tmh.zsh
 package/vendor/darwin-amd64/tmh
 package/vendor/darwin-arm64/tmh
 package/vendor/linux-amd64/tmh
@@ -107,9 +109,8 @@ diff -u "$tmp_dir/package-files.expected" "$tmp_dir/package-files.actual"
 
 npm install --ignore-scripts --no-audit --no-fund --prefix "$install_dir" "$output_dir/allenreder-tmh-1.2.3.tgz" >/dev/null
 test "$("$install_dir/node_modules/.bin/tmh" --version)" = "1.2.3"
-test "$("$install_dir/node_modules/.bin/tmha" --version)" = "1.2.3"
 test "$("$install_dir/node_modules/.bin/tmh" one two)" = "command=tmh args=one,two"
-test "$("$install_dir/node_modules/.bin/tmha" one two)" = "command=tmha args=one,two"
+test ! -e "$install_dir/node_modules/.bin/tmha"
 
 set +e
 "$install_dir/node_modules/.bin/tmh" exit7

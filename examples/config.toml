@@ -4,5 +4,8 @@ base_url = "https://api.openai.com/v1"
 # Required. tmh intentionally has no default model.
 model = "your-model-name"
 
-tmh_timeout_seconds = 30
-tmha_timeout_seconds = 90
+# auto detects zsh, bash, or fish from $SHELL.
+shell = "auto"
+
+generate_timeout_seconds = 30
+agent_timeout_seconds = 90

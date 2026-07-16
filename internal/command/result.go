@@ -1,10 +1,12 @@
-package generator
+package command
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const MaxExplanationBytes = 2 * 1024
@@ -21,10 +23,22 @@ func ParseResult(content string) (Result, error) {
 	if err := decoder.Decode(&result); err != nil {
 		return Result{}, fmt.Errorf("response is not the required JSON object: %w", err)
 	}
-	if err := ensureEOF(decoder); err != nil {
-		return Result{}, err
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return Result{}, fmt.Errorf("response contains trailing content")
+		}
+		return Result{}, fmt.Errorf("decode trailing response content: %w", err)
 	}
 	result.Command = strings.TrimSpace(result.Command)
+	if !utf8.ValidString(result.Explanation) {
+		return Result{}, fmt.Errorf("explanation is not valid UTF-8")
+	}
+	for _, r := range result.Explanation {
+		if unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) || (unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t') {
+			return Result{}, fmt.Errorf("explanation contains a control or formatting character")
+		}
+	}
 	result.Explanation = strings.Join(strings.Fields(result.Explanation), " ")
 	if result.Explanation == "" {
 		return Result{}, fmt.Errorf("explanation is empty")
@@ -33,14 +47,4 @@ func ParseResult(content string) (Result, error) {
 		return Result{}, fmt.Errorf("explanation exceeds %d bytes", MaxExplanationBytes)
 	}
 	return result, nil
-}
-
-func ensureEOF(decoder *json.Decoder) error {
-	var extra any
-	if err := decoder.Decode(&extra); err == io.EOF {
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("decode trailing response content: %w", err)
-	}
-	return fmt.Errorf("response contains trailing content")
 }

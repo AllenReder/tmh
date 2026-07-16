@@ -26,9 +26,13 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Install Zsh on Linux
+      - name: Install Zsh and Fish on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
+
+      - name: Install Fish on macOS
+        if: runner.os == 'macOS'
+        run: brew install fish
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6

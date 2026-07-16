@@ -42,8 +42,8 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Install Zsh
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Install Zsh and Fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6

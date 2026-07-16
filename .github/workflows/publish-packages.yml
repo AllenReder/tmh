@@ -170,7 +170,6 @@ jobs:
           brew install tmh-test/tap/tmh
           brew test tmh-test/tap/tmh
           test "$(tmh --version)" = "${{ needs.resolve.outputs.bare_version }}"
-          test "$(tmha --version)" = "${{ needs.resolve.outputs.bare_version }}"
 
   publish-npm:
     needs: [resolve, prepare, test-npm, test-homebrew]

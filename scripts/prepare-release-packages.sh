@@ -39,17 +39,15 @@ else
 fi
 
 rm -rf -- "$output_dir"
-mkdir -p "$output_dir/npm-package/bin" "$output_dir/npm-package/lib" "$output_dir/npm-package/shell"
+mkdir -p "$output_dir/npm-package/bin" "$output_dir/npm-package/lib"
 
 install -m 0755 "$source_dir/npm/bin/tmh.mjs" "$output_dir/npm-package/bin/tmh.mjs"
-install -m 0755 "$source_dir/npm/bin/tmha.mjs" "$output_dir/npm-package/bin/tmha.mjs"
 install -m 0644 "$source_dir/npm/lib/launcher.mjs" "$output_dir/npm-package/lib/launcher.mjs"
 install -m 0644 "$source_dir/npm/package.json" "$output_dir/npm-package/package.json"
 install -m 0644 "$source_dir/README.md" "$output_dir/npm-package/README.md"
 install -m 0644 "$source_dir/README.zh-CN.md" "$output_dir/npm-package/README.zh-CN.md"
 install -m 0644 "$source_dir/LICENSE" "$output_dir/npm-package/LICENSE"
 install -m 0644 "$source_dir/THIRD_PARTY_NOTICES.md" "$output_dir/npm-package/THIRD_PARTY_NOTICES.md"
-install -m 0644 "$source_dir/shell/tmh.zsh" "$output_dir/npm-package/shell/tmh.zsh"
 
 for platform in $(release_platforms); do
   os="${platform%_*}"

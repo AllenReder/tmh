@@ -30,8 +30,10 @@ not accepted.
   the `npm publish` action.
 - No npm token, `NODE_AUTH_TOKEN`, or token fallback in the repository or
   release Environment.
-- Local `git`, `gh`, Go, Node.js 22 or newer, npm, Ruby, Zsh, GoReleaser,
-  OpenSSL, curl, tar, and ripgrep.
+- Local `git`, `gh`, Go, Node.js 22 or newer, npm, Ruby, Zsh, Bash, Fish 3.6
+  or newer, GoReleaser, OpenSSL, curl, tar, and ripgrep. Fish is required for
+  a release even though a developer's local `make check` can skip Fish-only
+  syntax checks when it is absent.
 
 Confirm access before starting:
 
@@ -46,20 +48,41 @@ Run the same deterministic interfaces used by CI and the Release workflow:
 
 ```sh
 make check
-make release-check VERSION=v0.1.3
+make release-check VERSION=v0.2.0
 ```
 
 The snapshot command verifies all four archives, `checksums.txt`, archive
-contents and permissions, the assembled npm package, both command launchers,
-and the generated Homebrew Formula. Snapshot binaries keep GoReleaser's
-snapshot version and are not required to report the future release version.
+contents and permissions, the assembled npm package and its single `tmh`
+launcher, and the generated Homebrew Formula. It also verifies that legacy
+`tmha` launchers and standalone shell-integration files are absent. Shell
+integration is rendered from the binary through `tmh shell init`. Snapshot
+binaries keep GoReleaser's snapshot version and are not required to report the
+future release version.
+
+For the v0.2 breaking interface, confirm that validation covers all of the
+following before tagging:
+
+- `tmh <request>`, `tmh generate`, and `tmh agent` work while `tmha` and
+  `tmh --agent` are rejected.
+- Zsh, Bash, and Fish generation use their matching local syntax validators;
+  Bash 3.2 takes the documented no-widget fallback.
+- `tmh shell init zsh|bash|fish` renders the embedded integration, default
+  bindings preserve existing keys, and `--no-bind`/`--force-bind` behave as
+  documented.
+- `run_command` is absent by default and appears only for
+  `tmh agent --exec=inspection`.
+- Linux inspection fails closed without Landlock ABI v3 and seccomp-BPF;
+  macOS inspection fails closed without a successful deprecated
+  `sandbox-exec` Seatbelt canary.
+- The example configuration uses `shell`, `generate_timeout_seconds`, and
+  `agent_timeout_seconds`; the two v0.1 timeout fields remain rejected.
 
 ## Publish
 
 Run the tracked release entry point from the repository:
 
 ```sh
-scripts/release.sh v0.1.3
+scripts/release.sh v0.2.0
 ```
 
 Before creating a tag, the script verifies the repository, permissions,
@@ -76,11 +99,12 @@ verification.
 
 ## Workflow responsibilities
 
-- `.github/workflows/ci.yml` prepares the supported toolchain and runs
-  `make check` on macOS and Linux.
+- `.github/workflows/ci.yml` prepares the supported toolchain, including Fish,
+  and runs `make check` on macOS and Linux. This exercises both platform
+  sandbox implementations and all three shell integrations.
 - `.github/workflows/release.yml` independently runs `make check` and
-  `make release-check`, publishes the GitHub Release through GoReleaser, and
-  verifies the downloaded assets.
+  `make release-check` with Fish installed, publishes the GitHub Release
+  through GoReleaser, and verifies the downloaded assets.
 - `.github/workflows/publish-packages.yml` assembles packages from the target
   tag and verified Release assets, tests npm and Homebrew on macOS and Linux,
   publishes through scoped credentials, and verifies the public channels.
@@ -101,7 +125,7 @@ skipped.
   retry only the downstream package workflow for the same immutable Release:
 
   ```sh
-  gh workflow run publish-packages.yml --repo AllenReder/tmh --ref main -f version=v0.1.3
+  gh workflow run publish-packages.yml --repo AllenReder/tmh --ref main -f version=v0.2.0
   ```
 
 - If npm already contains the version with different integrity, stop. npm

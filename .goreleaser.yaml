@@ -27,8 +27,6 @@ archives:
       - THIRD_PARTY_NOTICES.md
       - README.md
       - README.zh-CN.md
-      - src: shell/tmh.zsh
-        dst: tmh.zsh
       - src: examples/config.toml
         dst: config.example.toml
 

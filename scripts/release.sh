@@ -220,9 +220,12 @@ gh release download "$version" --repo "$repo" --dir "$verify_dir"
 scripts/verify-release-assets.sh "$verify_dir" "$version"
 
 log "Running the version-pinned installation smoke test"
-TMH_VERSION="$version" TMH_INSTALL_DIR="$install_root/bin" TMH_INSTALL_ZSH=0 sh install.sh >/dev/null
+mkdir -p "$install_root/home"
+HOME="$install_root/home" XDG_DATA_HOME="$install_root/home/.local/share" \
+  TMH_VERSION="$version" TMH_INSTALL_DIR="$install_root/bin" TMH_INSTALL_SHELL=none \
+  sh install.sh >/dev/null
 [[ "$("$install_root/bin/tmh" --version)" == "${version#v}" ]] || release_fail "installed version verification failed"
-[[ -L "$install_root/bin/tmha" ]] || release_fail "tmha symlink was not installed"
+[[ ! -e "$install_root/bin/tmha" ]] || release_fail "installer created legacy tmha"
 
 log "Verifying npm and Homebrew publication"
 scripts/prepare-release-packages.sh "$version" "$verify_dir" "$package_dir" >/dev/null
