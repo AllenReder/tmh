@@ -113,6 +113,13 @@ The package workflow can be safely retried for an existing version. Existing
 npm content and Formula content must match exactly before a publish step is
 skipped.
 
+The package workflow pins Node.js 24.18.0 and npm 11.18.0 because the gzip
+bytes produced by `npm pack` can vary across Node.js compression runtimes even
+when the unpacked package contents are identical. Post-publication verification
+downloads the exact `package-release-vMAJOR.MINOR.PATCH` workflow artifact and
+compares that canonical tarball with npm; it does not rebuild the tarball with
+the local Node.js toolchain.
+
 ## Failure recovery
 
 - Before the tag is pushed, fix the failure and rerun the release command. No

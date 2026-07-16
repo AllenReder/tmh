@@ -18,6 +18,24 @@ if ! grep -Eq 'brew install([^#]*[[:space:]])ripgrep([[:space:]]|$)' "$source_re
   printf '%s\n' 'macOS CI workflow does not install ripgrep' >&2
   exit 1
 fi
+package_node_count="$(grep -Fc 'node-version: "24.18.0"' "$source_repo/.github/workflows/publish-packages.yml")"
+if [ "$package_node_count" -ne 4 ]; then
+  printf '%s\n' 'package workflow does not pin every job to Node.js 24.18.0' >&2
+  exit 1
+fi
+package_npm_count="$(grep -Fc 'npm install --global npm@11.18.0' "$source_repo/.github/workflows/publish-packages.yml")"
+if [ "$package_npm_count" -ne 2 ]; then
+  printf '%s\n' 'package workflow does not pin npm 11.18.0 for prepare and publish' >&2
+  exit 1
+fi
+if ! grep -Fq 'gh run download "$packages_run_id"' "$source_repo/scripts/release.sh"; then
+  printf '%s\n' 'release script does not verify the exact package workflow artifact' >&2
+  exit 1
+fi
+if grep -Fq 'scripts/prepare-release-packages.sh "$version" "$verify_dir"' "$source_repo/scripts/release.sh"; then
+  printf '%s\n' 'release script rebuilds the npm package with the unpinned local Node.js toolchain' >&2
+  exit 1
+fi
 
 cat > "$fake_bin/gh" <<'FAKE_GH'
 #!/bin/sh
@@ -76,7 +94,16 @@ cat > "$fake_bin/goreleaser" <<'FAKE_GORELEASER'
 #!/bin/sh
 exit 99
 FAKE_GORELEASER
-chmod +x "$fake_bin/gh" "$fake_bin/npm" "$fake_bin/make" "$fake_bin/goreleaser"
+cat > "$fake_bin/fish" <<'FAKE_FISH'
+#!/bin/sh
+set -eu
+if [ "${1:-}" = '--version' ]; then
+  printf 'fish, version %s\n' "${TMH_TEST_FISH_VERSION:-3.6.0}"
+  exit 0
+fi
+exit 99
+FAKE_FISH
+chmod +x "$fake_bin/gh" "$fake_bin/npm" "$fake_bin/make" "$fake_bin/goreleaser" "$fake_bin/fish"
 
 create_repository() {
   case_name="$1"
@@ -140,6 +167,43 @@ run_conflict_case() {
   test ! -e "$make_log"
 }
 
+run_fish_preflight_case() {
+  case_name="$1"
+  fish_version="$2"
+  expected_message="$3"
+  paths="$(create_repository "$case_name")"
+  repo="$(printf '%s\n' "$paths" | sed -n '1p')"
+  remote="$(printf '%s\n' "$paths" | sed -n '2p')"
+  before_refs="$(git --git-dir="$remote" show-ref || true)"
+  make_log="$tmp_dir/$case_name/make.log"
+  case_bin="$tmp_dir/$case_name/bin"
+  mkdir -p "$case_bin"
+  for command_name in bash grep git gh go make zsh goreleaser tar rg node npm ruby openssl curl; do
+    if [ -x "$fake_bin/$command_name" ]; then
+      ln -s "$fake_bin/$command_name" "$case_bin/$command_name"
+    else
+      ln -s "$(command -v "$command_name")" "$case_bin/$command_name"
+    fi
+  done
+  if [ "$fish_version" != 'missing' ]; then
+    ln -s "$fake_bin/fish" "$case_bin/fish"
+  fi
+
+  if PATH="$case_bin" TMH_REPO_DIR="$repo" TMH_TEST_MAKE_LOG="$make_log" \
+    TMH_TEST_FISH_VERSION="$fish_version" "$source_repo/scripts/release.sh" v1.2.3 \
+    >"$tmp_dir/$case_name/stdout" 2>"$tmp_dir/$case_name/stderr"; then
+    printf 'release preflight accepted Fish case %s\n' "$case_name" >&2
+    exit 1
+  fi
+  grep -Fq "$expected_message" "$tmp_dir/$case_name/stderr"
+  after_refs="$(git --git-dir="$remote" show-ref || true)"
+  [ "$after_refs" = "$before_refs" ] || {
+    printf 'release preflight changed remote refs for Fish case %s\n' "$case_name" >&2
+    exit 1
+  }
+  test ! -e "$make_log"
+}
+
 if "$source_repo/scripts/release.sh" v1.2.3-rc1 >/dev/null 2>&1; then
   printf 'release script accepted a prerelease version\n' >&2
   exit 1
@@ -149,5 +213,7 @@ run_conflict_case local-tag local-tag
 run_conflict_case remote-tag remote-tag
 run_conflict_case github-release github-release
 run_conflict_case npm-version npm-version
+run_fish_preflight_case missing-fish missing 'fish is required'
+run_fish_preflight_case old-fish 3.5.1 'Fish 3.6 or newer is required'
 
 printf 'Release script preflight tests passed.\n'

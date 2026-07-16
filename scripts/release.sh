@@ -129,12 +129,26 @@ ensure_version_unused() {
   ensure_npm_version_unused "$version"
 }
 
+require_supported_fish() {
+  local output major minor
+  output="$(fish --version 2>&1)" || release_fail "unable to determine Fish version"
+  if [[ ! "$output" =~ ([0-9]+)\.([0-9]+)(\.[0-9]+)? ]]; then
+    release_fail "unable to determine Fish version from: $output"
+  fi
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  if (( major < 3 || (major == 3 && minor < 6) )); then
+    release_fail "Fish 3.6 or newer is required; found $output"
+  fi
+}
+
 if [[ "$#" -ne 1 ]]; then
   release_fail "usage: release.sh <vMAJOR.MINOR.PATCH>"
 fi
 version="$(release_normalize_version "$1")"
 
-release_require_commands git gh go make zsh goreleaser tar rg node npm ruby openssl curl
+release_require_commands git gh go make zsh fish goreleaser tar rg node npm ruby openssl curl
+require_supported_fish
 [ -d "$repo_dir/.git" ] || release_fail "repository not found: $repo_dir"
 cd "$repo_dir"
 
@@ -228,7 +242,10 @@ HOME="$install_root/home" XDG_DATA_HOME="$install_root/home/.local/share" \
 [[ ! -e "$install_root/bin/tmha" ]] || release_fail "installer created legacy tmha"
 
 log "Verifying npm and Homebrew publication"
-scripts/prepare-release-packages.sh "$version" "$verify_dir" "$package_dir" >/dev/null
+gh run download "$packages_run_id" \
+  --repo "$repo" \
+  --name "package-release-$version" \
+  --dir "$package_dir"
 npm_package="$package_dir/allenreder-tmh-${version#v}.tgz"
 formula="$package_dir/tmh.rb"
 published_summary="$(scripts/verify-published-packages.sh "$version" "$npm_package" "$formula")"
