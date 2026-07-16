@@ -26,13 +26,13 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Install Zsh and Fish on Linux
+      - name: Install Zsh, Fish, and ripgrep on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish ripgrep
 
-      - name: Install Fish on macOS
+      - name: Install Fish and ripgrep on macOS
         if: runner.os == 'macOS'
-        run: brew install fish
+        run: brew install fish ripgrep
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6

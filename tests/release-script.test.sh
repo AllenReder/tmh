@@ -8,6 +8,17 @@ trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
 fake_bin="$tmp_dir/fake-bin"
 mkdir -p "$fake_bin"
 
+for workflow in "$source_repo/.github/workflows/ci.yml" "$source_repo/.github/workflows/release.yml"; do
+  if ! grep -Eq 'apt-get install -y([^#]*[[:space:]])ripgrep([[:space:]]|$)' "$workflow"; then
+    printf '%s\n' "Linux workflow does not install ripgrep: $workflow" >&2
+    exit 1
+  fi
+done
+if ! grep -Eq 'brew install([^#]*[[:space:]])ripgrep([[:space:]]|$)' "$source_repo/.github/workflows/ci.yml"; then
+  printf '%s\n' 'macOS CI workflow does not install ripgrep' >&2
+  exit 1
+fi
+
 cat > "$fake_bin/gh" <<'FAKE_GH'
 #!/bin/sh
 set -eu
