@@ -114,8 +114,10 @@ make build
 
 ## Configure
 
-Create `~/.config/tmh/config.toml`, or use
-`$XDG_CONFIG_HOME/tmh/config.toml`:
+The standalone installer automatically creates `~/.config/tmh/config.toml`, or
+`$XDG_CONFIG_HOME/tmh/config.toml`, when it is missing. Existing configuration
+files and symlinks are never overwritten. For Homebrew, npm, or source installs,
+create it manually from this template:
 
 ```toml
 base_url = "https://api.openai.com/v1"

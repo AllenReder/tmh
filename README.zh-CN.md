@@ -108,8 +108,10 @@ make build
 
 ## 配置
 
-创建 `~/.config/tmh/config.toml`，或者使用
-`$XDG_CONFIG_HOME/tmh/config.toml`：
+standalone installer 会在配置不存在时自动创建
+`~/.config/tmh/config.toml`，或 `$XDG_CONFIG_HOME/tmh/config.toml`。已有的
+配置文件或符号链接不会被覆盖。通过 Homebrew、npm 或源码安装时，可按以下
+模板手动创建：
 
 ```toml
 base_url = "https://api.openai.com/v1"

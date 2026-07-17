@@ -4,6 +4,7 @@ set -eu
 REPO="AllenReder/tmh"
 INSTALL_DIR="${TMH_INSTALL_DIR:-$HOME/.local/bin}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 fail() {
   printf 'tmh installer: %s\n' "$*" >&2
@@ -46,7 +47,8 @@ fi
 
 tmp_dir="$(mktemp -d)"
 startup_stage=""
-trap 'rm -rf "$tmp_dir"; [ -z "${startup_stage:-}" ] || rm -f "$startup_stage"' EXIT HUP INT TERM
+config_stage=""
+trap 'rm -rf "$tmp_dir"; [ -z "${startup_stage:-}" ] || rm -f "$startup_stage"; [ -z "${config_stage:-}" ] || rm -f "$config_stage"' EXIT HUP INT TERM
 
 printf 'Downloading %s...\n' "$archive"
 curl -fsSL "$base_url/$archive" -o "$tmp_dir/$archive"
@@ -65,6 +67,7 @@ fi
 
 tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
 [ -x "$tmp_dir/tmh" ] || fail "release archive did not contain tmh"
+[ -f "$tmp_dir/config.example.toml" ] || fail "release archive did not contain config.example.toml"
 if [ -n "$expected_version" ]; then
   actual_version="$("$tmp_dir/tmh" --version)"
   [ "$actual_version" = "$expected_version" ] || fail "downloaded tmh version is $actual_version, expected $expected_version"
@@ -87,6 +90,34 @@ if [ -n "$expected_version" ]; then
   installed_version="$("$INSTALL_DIR/tmh" --version)"
   [ "$installed_version" = "$expected_version" ] || fail "installed tmh version is $installed_version, expected $expected_version"
 fi
+
+create_default_config() {
+  config_dir="$CONFIG_HOME/tmh"
+  config_file="$config_dir/config.toml"
+  if [ -e "$config_file" ] || [ -L "$config_file" ]; then
+    return
+  fi
+
+  mkdir -p "$config_dir" || fail "could not create config directory: $config_dir"
+  [ -d "$config_dir" ] || fail "config directory is not a directory: $config_dir"
+  config_stage="$(mktemp "$config_dir/.tmh-config.XXXXXX")" || fail "could not stage default config: $config_file"
+  chmod 0600 "$config_stage"
+  cat "$tmp_dir/config.example.toml" > "$config_stage"
+  if ln "$config_stage" "$config_file" 2>/dev/null; then
+    rm -f "$config_stage"
+    config_stage=""
+    printf 'Created default config in %s.\n' "$config_file"
+    return
+  fi
+  if [ -e "$config_file" ] || [ -L "$config_file" ]; then
+    rm -f "$config_stage"
+    config_stage=""
+    return
+  fi
+  fail "could not create default config: $config_file"
+}
+
+create_default_config
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;

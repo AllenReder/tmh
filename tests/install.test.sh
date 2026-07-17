@@ -22,12 +22,18 @@ fake_bin="$tmp_dir/fake-bin"
 mkdir -p "$payload" "$fake_bin"
 
 (cd "$repo_root" && go build -ldflags '-X github.com/AllenReder/tmh/internal/cli.Version=1.2.3' -o "$payload/tmh" ./cmd/tmh)
+install -m 0644 "$repo_root/examples/config.toml" "$payload/config.example.toml"
 
 create_fixtures() {
   fixture_dir="$1"
   checksum_mode="${2:-valid}"
+  content_mode="${3:-complete}"
   mkdir -p "$fixture_dir"
-  tar -czf "$fixture_dir/$archive" -C "$payload" tmh
+  if [ "$content_mode" = "missing-config" ]; then
+    tar -czf "$fixture_dir/$archive" -C "$payload" tmh
+  else
+    tar -czf "$fixture_dir/$archive" -C "$payload" tmh config.example.toml
+  fi
   if [ "$checksum_mode" = "invalid" ]; then
     digest="0000000000000000000000000000000000000000000000000000000000000000"
   elif command -v sha256sum >/dev/null 2>&1; then
@@ -94,8 +100,10 @@ run_install() {
 original_path="$PATH"
 valid_fixtures="$tmp_dir/fixtures-valid"
 bad_checksum_fixtures="$tmp_dir/fixtures-bad-checksum"
+missing_config_fixtures="$tmp_dir/fixtures-missing-config"
 create_fixtures "$valid_fixtures"
 create_fixtures "$bad_checksum_fixtures" invalid
+create_fixtures "$missing_config_fixtures" valid missing-config
 
 cat > "$tmp_dir/run-no-tty.go" <<'EOF'
 package main
@@ -126,6 +134,26 @@ go build -o "$tmp_dir/run-no-tty" "$tmp_dir/run-no-tty.go"
 run_install ask-no-tty "$valid_fixtures" '<latest>' '<default>' no-tty
 test -x "$tmp_dir/ask-no-tty/home/.local/bin/tmh"
 test ! -e "$tmp_dir/ask-no-tty/home/.zshrc"
+cmp -s "$repo_root/examples/config.toml" "$tmp_dir/ask-no-tty/home/.config/tmh/config.toml"
+if stat -f '%Lp' "$tmp_dir/ask-no-tty/home/.config/tmh/config.toml" >/dev/null 2>&1; then
+  config_mode="$(stat -f '%Lp' "$tmp_dir/ask-no-tty/home/.config/tmh/config.toml")"
+else
+  config_mode="$(stat -c '%a' "$tmp_dir/ask-no-tty/home/.config/tmh/config.toml")"
+fi
+test "$config_mode" = 600
+
+mkdir -p "$tmp_dir/preserve-config/home/.config/tmh"
+printf '%s\n' 'model = "keep-existing"' > "$tmp_dir/preserve-config/home/.config/tmh/config.toml"
+cp "$tmp_dir/preserve-config/home/.config/tmh/config.toml" "$tmp_dir/preserve-config/original-config.toml"
+run_install preserve-config "$valid_fixtures" '<latest>' none
+cmp -s "$tmp_dir/preserve-config/original-config.toml" "$tmp_dir/preserve-config/home/.config/tmh/config.toml"
+
+mkdir -p "$tmp_dir/preserve-config-symlink/home/.config/tmh" "$tmp_dir/preserve-config-symlink/home/dotfiles"
+printf '%s\n' 'model = "keep-symlink-target"' > "$tmp_dir/preserve-config-symlink/home/dotfiles/tmh.toml"
+ln -s "$tmp_dir/preserve-config-symlink/home/dotfiles/tmh.toml" "$tmp_dir/preserve-config-symlink/home/.config/tmh/config.toml"
+run_install preserve-config-symlink "$valid_fixtures" '<latest>' none
+test -L "$tmp_dir/preserve-config-symlink/home/.config/tmh/config.toml"
+grep -Fq 'keep-symlink-target' "$tmp_dir/preserve-config-symlink/home/dotfiles/tmh.toml"
 
 run_install latest "$valid_fixtures" '<latest>' zsh
 cat > "$tmp_dir/latest/home/.zshrc" <<'EOF'
@@ -211,6 +239,12 @@ if run_install bad-checksum "$bad_checksum_fixtures" 'v1.2.3' none >/dev/null 2>
   printf 'installer accepted a checksum mismatch\n' >&2
   exit 1
 fi
+
+if run_install missing-config "$missing_config_fixtures" 'v1.2.3' none >/dev/null 2>&1; then
+  printf 'installer accepted an archive without config.example.toml\n' >&2
+  exit 1
+fi
+test ! -e "$tmp_dir/missing-config/home/.local/bin/tmh"
 
 if run_install version-mismatch "$valid_fixtures" 'v1.2.4' none >/dev/null 2>&1; then
   printf 'installer accepted a mismatched binary version\n' >&2
