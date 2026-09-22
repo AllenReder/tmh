@@ -2,8 +2,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/elastic/go-seccomp-bpf v1.6.0 h1:NYduiYxRJ0ZkIyQVwlSskcqPPSg6ynu5pK0/d7SQATs=
 github.com/elastic/go-seccomp-bpf v1.6.0/go.mod h1:5tFsTvH4NtWGfpjsOQD53H8HdVQ+zSZFRUDSGevC0Kc=
-github.com/landlock-lsm/go-landlock v0.9.0 h1:2q8G8yx9Hsd5bV+R6PJfgQl0zszNxC8KO+SIqGwfxlw=
-github.com/landlock-lsm/go-landlock v0.9.0/go.mod h1:mn5GSi81Jf7yMs5WSi+SUi4sUeNLUGVdbT4Id6wXNQw=
+github.com/landlock-lsm/go-landlock v0.10.1 h1:MkvuYeTgGRpOnROAO9V2gV3C5lctFr6O0b9wnPWcQWk=
+github.com/landlock-lsm/go-landlock v0.10.1/go.mod h1:mn5GSi81Jf7yMs5WSi+SUi4sUeNLUGVdbT4Id6wXNQw=
 github.com/pelletier/go-toml/v2 v2.2.4 h1:mye9XuhQ6gvn5h28+VilKrrPoQVanw5PMw/TB0t5Ec4=
 github.com/pelletier/go-toml/v2 v2.2.4/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

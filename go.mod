@@ -4,7 +4,7 @@ go 1.25.12
 
 require (
 	github.com/elastic/go-seccomp-bpf v1.6.0
-	github.com/landlock-lsm/go-landlock v0.9.0
+	github.com/landlock-lsm/go-landlock v0.10.1
 	github.com/pelletier/go-toml/v2 v2.2.4
 )
 
